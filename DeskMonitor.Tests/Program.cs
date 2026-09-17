@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using DeskMonitor;
 using DeskMonitor.Core;
 
+if (await FakeCodexServer.RunAsync(args)) return;
+
 var now = DateTimeOffset.UtcNow;
 var payload = JsonSerializer.Serialize(new { e = "24hrTicker", E = now.ToUnixTimeMilliseconds(), s = "BTCUSDT", c = "110", o = "100", h = "120", l = "90" });
 var passed = 0;
@@ -73,6 +75,7 @@ Check(!quota.IsStale(now.AddSeconds(119)) && quota.IsStale(now.AddSeconds(121)),
 Check(quota.Primary.AwaitingReset(DateTimeOffset.FromUnixTimeSeconds(2000000001)), "elapsed reset is pending rather than assumed full");
 var partial = ParseUsage("""{"rateLimits":{"primary":null,"secondary":{"usedPercent":101,"windowDurationMins":null,"resetsAt":null}}}""");
 Check(partial.Primary is null && partial.Secondary!.RemainingPercent == 0 && partial.Secondary.ResetsAt is null, "missing windows stay unknown and overuse clamps remaining");
+await CodexUsageProcessChecks.RunAsync(Check);
 Check(ParseUsage("""{"rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":15}}}""").Primary!.Label == "15 分钟", "quota labels are not hardcoded to five hours");
 foreach (var invalid in new[] { "{}", "[]", """{"rateLimitsByLimitId":{"other":{}},"rateLimits":{"primary":{"usedPercent":1}}}""", """{"rateLimits":{"primary":{"usedPercent":null}}}""", """{"rateLimits":{"primary":{"usedPercent":-1}}}""", """{"rateLimits":{"primary":{"usedPercent":4,"resetsAt":2000000000000}}}""", """{"rateLimits":{"primary":{"usedPercent":4,"windowDurationMins":"300"}}}""" })
 {

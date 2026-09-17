@@ -178,9 +178,9 @@ public partial class MainWindow : Window
             if (!token.IsCancellationRequested) { _usage = usage; _usageError = null; }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { _nextUsageRead = DateTimeOffset.MinValue; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or Win32Exception or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or Win32Exception or InvalidOperationException)
         {
-            if (!token.IsCancellationRequested) { _usage = null; _usageError = ex.Message; }
+            if (!token.IsCancellationRequested) _usageError = ex.Message;
         }
         finally
         {

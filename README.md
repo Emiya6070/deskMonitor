@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.1-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.2-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；行情观察不需要 Codex 或币安 API Key。
 
@@ -60,7 +60,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 通过本机 `codex.exe app-server --stdio` 的 `account/rateLimits/read` 读取当前登录账户的共享额度；不消耗重置券、不发起模型请求、不读取会话正文或自行读取登录凭据。窗口名称依接口实际周期显示；未提供的额度窗口整行隐藏，再次返回时恢复，不能推断为满额。剩余百分比为 `100 - usedPercent`，优先读取 `rateLimitsByLimitId.codex`。这不是本地 Token 总数、费用或当前任务专属额度。
 
-每分钟查询一次，每次查询后退出子进程；隐藏挂件或关闭卡片时停止查询。错误时清除数值并显示原因；超过两分钟的数据变淡，到达重置时间显示「待更新」，不会自行补成 100%。查询超时为 20 秒，进程退出宽限 2 秒。设置可指定 Codex EXE；留空依次查找用户级标准安装位置和 PATH 中的 `codex.exe`。登录与 `CODEX_HOME` 沿用本机 Codex 环境；API Key 模式不保证有 ChatGPT 额度。
+每分钟查询一次，每次查询后退出子进程；隐藏挂件或关闭卡片时停止查询。读取失败时保留并淡化上次成功数值，标明上次更新时间，悬停查看原因；继续按每分钟周期自动重试，也可手动刷新。尚未读取成功时不补造数据。超过两分钟的数据变淡，到达重置时间显示「待更新」，不会自行补成 100%。查询超时为 20 秒；正常退出、终止后退出和日志管道清理各有最多 2 秒等待，防止清理一直占用刷新状态。设置可指定 Codex EXE；留空依次查找用户级标准安装位置和 PATH 中的 `codex.exe`。登录与 `CODEX_HOME` 沿用本机 Codex 环境；API Key 模式不保证有 ChatGPT 额度。
 
 参考 [QuotaLoom 的数据接入设计](https://github.com/EricsmOOn/quota-loom/blob/main/docs/ARCHITECTURE.md)，本实现使用 C# 原生卡片，未引入其 Tauri/React 运行时或复制其源码。协议依据 [Codex App Server 官方文档](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)。
 

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -92,30 +91,46 @@ public static class CodexUsageClient
         start.ArgumentList.Add("--stdio");
         using var process = Process.Start(start) ?? throw new IOException("无法启动 Codex 额度查询。");
         // Drain, but never retain or display server logs (which may contain private paths).
-        var drain = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+        using var drainCancellation = new CancellationTokenSource();
+        var drain = process.StandardError.BaseStream.CopyToAsync(Stream.Null, drainCancellation.Token);
+        var stage = "初始化";
         try
         {
-            await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"desk_monitor\",\"title\":\"DeskMonitor\",\"version\":\"0.3.0\"}}}".AsMemory(), token);
+            await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"desk_monitor\",\"title\":\"DeskMonitor\",\"version\":\"0.3.2\"}}}".AsMemory(), token);
             await ReadResponseAsync(process, 1, token);
+            stage = "读取额度";
             await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\",\"params\":{}}".AsMemory(), token);
             await process.StandardInput.WriteLineAsync("{\"id\":2,\"method\":\"account/rateLimits/read\"}".AsMemory(), token);
             var response = await ReadResponseAsync(process, 2, token);
             return CodexUsage.Parse(response, DateTimeOffset.UtcNow);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        { throw new IOException("Codex 查询超时；请检查网络和登录状态。"); }
+        { throw new IOException($"Codex {stage}超时；请检查网络和登录状态。"); }
         finally
         {
-            process.StandardInput.Close();
-            using var exitWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            try { await process.WaitForExitAsync(exitWait.Token); }
-            catch (OperationCanceledException)
+            try
             {
-                try { process.Kill(entireProcessTree: true); }
-                catch (InvalidOperationException) when (process.HasExited) { }
-                await process.WaitForExitAsync();
+                process.StandardInput.Close();
+                using var exitWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                try { await process.WaitForExitAsync(exitWait.Token); }
+                catch (OperationCanceledException)
+                {
+                    try { process.Kill(entireProcessTree: true); }
+                    catch (InvalidOperationException) when (process.HasExited) { }
+                    using var killWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    try { await process.WaitForExitAsync(killWait.Token); }
+                    catch (OperationCanceledException ex) { throw new IOException("Codex 查询进程未及时退出。", ex); }
+                }
             }
-            await drain;
+            finally
+            {
+                // A descendant can inherit stderr even after app-server exits. Never wait
+                // for pipe EOF indefinitely: that would keep every future refresh disabled.
+                drainCancellation.Cancel();
+                try { await drain.WaitAsync(TimeSpan.FromSeconds(2)); }
+                catch (OperationCanceledException) when (drainCancellation.IsCancellationRequested) { }
+                catch (TimeoutException ex) { throw new IOException("Codex 查询日志管道未及时关闭。", ex); }
+            }
         }
     }
     private static async Task<JsonElement> ReadResponseAsync(Process process, int id, CancellationToken token)
@@ -126,7 +141,14 @@ public static class CodexUsageClient
             using var document = JsonDocument.Parse(line);
             var root = document.RootElement;
             if (!root.TryGetProperty("id", out var value) || value.ValueKind != JsonValueKind.Number || value.GetInt32() != id) continue;
-            if (root.TryGetProperty("error", out _)) throw new IOException("Codex 无法读取账户额度；请确认已登录 ChatGPT，且网络可用。");
+            if (root.TryGetProperty("error", out var error))
+            {
+                // Keep the error code for diagnosis without displaying raw server messages,
+                // which can contain private paths, URLs or account details.
+                var code = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var number)
+                    && number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out var n) ? $"（错误码 {n}）" : "";
+                throw new IOException($"Codex {(id == 1 ? "初始化" : "读取账户额度")}失败{code}；请检查登录和网络。");
+            }
             if (!root.TryGetProperty("result", out var result)) throw new InvalidDataException("Codex 查询响应缺少结果。");
             return result.Clone();
         }
