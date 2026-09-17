@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.7-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.8-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；行情观察不需要 Codex 或币安 API Key。
 
@@ -54,7 +54,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 - **吸附**：开启「自动吸附屏幕边缘」后，拖动到当前显示器工作区边缘 12 DIP 内时吸附，避开任务栏。吸附后，鼠标沿离开边缘的方向累计移动 24 DIP 即可拖走；横纵方向分别判断，慢慢拖动也能脱离。设置中可以关闭。贴住屏幕工作区的四个边角时，对应圆角自动变为直角，拖离后恢复；其余圆角保留。
 - **自启动**：开启「登录 Windows 时自动启动」后写入当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskMonitor`。无需管理员权限；关闭开关只移除本应用的项。默认关闭。Windows 任务管理器中的禁用设置可能覆盖启动项。
 - **托盘与单实例**：挂件和设置窗口均不显示任务栏图标，仅保留通知区域的托盘图标（Windows 可能将其放在隐藏图标区）。减号以短暂淡出动画收起，双击托盘恢复，托盘右键可打开设置/退出。动画遵循 Windows 动画开关，仅在收起时创建临时快照，恢复或退出会取消未完成的动画。再次运行程序会恢复现有挂件，不产生重复行情进程。叉号退出时先隐藏窗口和托盘图标，再完成后台清理。
-- **Win+D 动画**：挂件可见时按 Win+D，以约 160 毫秒自定义淡出收起；再次按下以淡入恢复。仍然仅显示托盘图标，不拦截系统快捷键。长按不会重复切换；手动收起到托盘的挂件不会因此弹出，双击托盘可随时恢复。设置对话框打开时沿用系统显示桌面行为；本动画仅监听 Win+D，不处理任务栏右下角按钮或 Win+M。关闭 Windows 动画时直接切换。
+- **Win+D**：由 Windows 自行处理显示桌面；挂件不监听该快捷键，也不播放额外动画。
 - **持久化**：设置保存到 `%LOCALAPPDATA%/DeskMonitor/settings.json`；旧版单币种设置自动迁移，保留币种、置顶及位置。
 
 ## 行情数据源代理

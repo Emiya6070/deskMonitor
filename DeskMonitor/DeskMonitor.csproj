@@ -8,7 +8,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.7</Version>
+    <Version>0.3.8</Version>
     <ReleaseDate>2026-09-18</ReleaseDate>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../DeskMonitor.Core/DeskMonitor.Core.csproj" /></ItemGroup>
