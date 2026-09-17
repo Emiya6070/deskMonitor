@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+artifacts/
+.vs/
+*.user
+.env
+.env.*
+*.pfx
+*.p12
+**/settings.json

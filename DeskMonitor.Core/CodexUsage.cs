@@ -1,0 +1,134 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text.Json;
+
+namespace DeskMonitor.Core;
+
+public sealed record QuotaWindow(double UsedPercent, int? DurationMinutes, DateTimeOffset? ResetsAt)
+{
+    public double RemainingPercent => Math.Clamp(100 - UsedPercent, 0, 100);
+    public string Label => DurationMinutes switch
+    {
+        10080 => "每周", 300 => "5 小时", null => "额度",
+        int n when n % 1440 == 0 => $"{n / 1440} 天",
+        int n when n % 60 == 0 => $"{n / 60} 小时", int n => $"{n} 分钟"
+    };
+    public bool AwaitingReset(DateTimeOffset now) => ResetsAt is { } reset && reset <= now;
+}
+
+public sealed record CodexUsage(QuotaWindow? Primary, QuotaWindow? Secondary, DateTimeOffset FetchedAt)
+{
+    public bool IsStale(DateTimeOffset now) => now - FetchedAt > TimeSpan.FromMinutes(2);
+    public static CodexUsage Parse(JsonElement result, DateTimeOffset fetchedAt)
+    {
+        if (result.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Codex 额度响应格式无效。");
+        JsonElement bucket;
+        if (result.TryGetProperty("rateLimitsByLimitId", out var map) && map.ValueKind != JsonValueKind.Null)
+        {
+            if (map.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Codex 额度分类格式无效。");
+            if (!map.TryGetProperty("codex", out bucket)) throw new InvalidDataException("账户未返回 Codex 额度。");
+        }
+        else if (!result.TryGetProperty("rateLimits", out bucket)) throw new InvalidDataException("账户未返回 Codex 额度。");
+        if (bucket.ValueKind != JsonValueKind.Object) throw new InvalidDataException("账户未返回 Codex 额度。");
+        if (bucket.TryGetProperty("limitId", out var id) && id.ValueKind != JsonValueKind.Null && (id.ValueKind != JsonValueKind.String || id.GetString() != "codex"))
+            throw new InvalidDataException("返回的额度不属于 Codex。");
+        var primary = ReadWindow(bucket, "primary");
+        var secondary = ReadWindow(bucket, "secondary");
+        if (primary is null && secondary is null) throw new InvalidDataException("账户未提供额度窗口，请检查 Codex 的 ChatGPT 登录状态。");
+        return new(primary, secondary, fetchedAt);
+    }
+    private static QuotaWindow? ReadWindow(JsonElement bucket, string name)
+    {
+        if (!bucket.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("usedPercent", out var used)
+            || used.ValueKind != JsonValueKind.Number || !used.TryGetDouble(out var percent) || !double.IsFinite(percent) || percent < 0)
+            throw new InvalidDataException("Codex 已用百分比无效。");
+        int? duration = null;
+        if (value.TryGetProperty("windowDurationMins", out var mins) && mins.ValueKind != JsonValueKind.Null)
+        {
+            if (mins.ValueKind != JsonValueKind.Number || !mins.TryGetInt32(out var n) || n <= 0) throw new InvalidDataException("Codex 额度周期无效。");
+            duration = n;
+        }
+        DateTimeOffset? reset = null;
+        if (value.TryGetProperty("resetsAt", out var timestamp) && timestamp.ValueKind != JsonValueKind.Null)
+        {
+            if (timestamp.ValueKind != JsonValueKind.Number || !timestamp.TryGetInt64(out var seconds) || seconds <= 0 || seconds > 253402300799)
+                throw new InvalidDataException("Codex 重置时间无效。");
+            reset = DateTimeOffset.FromUnixTimeSeconds(seconds);
+        }
+        return new(percent, duration, reset);
+    }
+}
+
+public static class CodexUsageClient
+{
+    public static string ResolveExecutable(string? configuredPath)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            if (!Path.IsPathFullyQualified(configuredPath) || !File.Exists(configuredPath) || !configuredPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                throw new IOException("请选择有效的 Codex .exe 完整路径。");
+            return configuredPath;
+        }
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var candidates = new[] { Path.Combine(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe") }
+            .Concat((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+                .Where(Path.IsPathFullyQualified).Select(p => Path.Combine(p, "codex.exe")));
+        return candidates.FirstOrDefault(File.Exists) ?? throw new IOException("未找到 Codex；请在设置中选择 codex.exe，并在 Codex 中登录 ChatGPT。");
+    }
+    public static async Task<CodexUsage> ReadAsync(string? configuredPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var token = timeout.Token;
+        var start = new ProcessStartInfo(ResolveExecutable(configuredPath))
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
+            RedirectStandardOutput = true, RedirectStandardError = true,
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+        };
+        start.ArgumentList.Add("app-server");
+        start.ArgumentList.Add("--stdio");
+        using var process = Process.Start(start) ?? throw new IOException("无法启动 Codex 额度查询。");
+        // Drain, but never retain or display server logs (which may contain private paths).
+        var drain = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
+        try
+        {
+            await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"desk_monitor\",\"title\":\"DeskMonitor\",\"version\":\"0.3.0\"}}}".AsMemory(), token);
+            await ReadResponseAsync(process, 1, token);
+            await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\",\"params\":{}}".AsMemory(), token);
+            await process.StandardInput.WriteLineAsync("{\"id\":2,\"method\":\"account/rateLimits/read\"}".AsMemory(), token);
+            var response = await ReadResponseAsync(process, 2, token);
+            return CodexUsage.Parse(response, DateTimeOffset.UtcNow);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { throw new IOException("Codex 查询超时；请检查网络和登录状态。"); }
+        finally
+        {
+            process.StandardInput.Close();
+            using var exitWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            try { await process.WaitForExitAsync(exitWait.Token); }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) when (process.HasExited) { }
+                await process.WaitForExitAsync();
+            }
+            await drain;
+        }
+    }
+    private static async Task<JsonElement> ReadResponseAsync(Process process, int id, CancellationToken token)
+    {
+        while (true)
+        {
+            var line = await process.StandardOutput.ReadLineAsync(token) ?? throw new IOException("Codex 查询进程提前退出。");
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("id", out var value) || value.ValueKind != JsonValueKind.Number || value.GetInt32() != id) continue;
+            if (root.TryGetProperty("error", out _)) throw new IOException("Codex 无法读取账户额度；请确认已登录 ChatGPT，且网络可用。");
+            if (!root.TryGetProperty("result", out var result)) throw new InvalidDataException("Codex 查询响应缺少结果。");
+            return result.Clone();
+        }
+    }
+}

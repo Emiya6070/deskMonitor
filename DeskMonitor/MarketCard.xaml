@@ -1,0 +1,32 @@
+<UserControl x:Class="DeskMonitor.MarketCard" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Margin="0,0,0,8" Cursor="SizeAll">
+ <Border x:Name="CardRoot" Background="{DynamicResource CardBackground}" CornerRadius="{DynamicResource CardRadius}" Padding="16,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+  <Grid>
+   <Grid x:Name="CompactPanel" Visibility="Collapsed" SizeChanged="CompactSizeChanged">
+    <Grid.ColumnDefinitions><ColumnDefinition x:Name="CompactSymbolColumn" Width="1.05*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0"><TextBlock x:Name="CompactSymbol" FontSize="11" TextWrapping="Wrap"/><TextBlock x:Name="CompactFunding" FontSize="9" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/></StackPanel>
+    <Grid x:Name="SmallChart" Grid.Column="1" Width="52" Height="22" Margin="8,0" Visibility="Collapsed" VerticalAlignment="Center"><Canvas x:Name="SmallChartCanvas" ClipToBounds="True" SizeChanged="ChartSizeChanged"><Path x:Name="SmallChartLine" Stroke="{DynamicResource Accent}" StrokeThickness="1.3" StrokeLineJoin="Round"/></Canvas></Grid>
+    <Viewbox Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right"><TextBlock x:Name="CompactPrice" Text="—" FontSize="23" FontWeight="SemiBold" FontFamily="Segoe UI"/></Viewbox>
+   </Grid>
+   <Grid x:Name="FullPanel">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid><TextBlock x:Name="SymbolText" FontSize="16" FontWeight="SemiBold" Margin="0,0,90,0" TextTrimming="CharacterEllipsis"/><Border Background="{DynamicResource HoverBrush}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right"><TextBlock x:Name="KindText" FontSize="10" Foreground="{DynamicResource Accent}"/></Border></Grid>
+    <Grid Grid.Row="1" x:Name="PriceAndTrend">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="TrendColumn" Width="0"/></Grid.ColumnDefinitions>
+     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+     <StackPanel x:Name="PriceBlock">
+      <Viewbox x:Name="PriceBox" Height="43" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,4,0,2"><TextBlock x:Name="PriceText" Text="—" FontSize="36" FontWeight="SemiBold" FontFamily="Segoe UI" Typography.NumeralAlignment="Tabular"/></Viewbox>
+      <StackPanel Orientation="Horizontal"><TextBlock x:Name="ChangeText" Text="等待行情" FontSize="11" FontWeight="SemiBold"/><TextBlock Text="  ·  24H" Foreground="{DynamicResource Muted}" FontSize="10" VerticalAlignment="Center"/></StackPanel>
+     </StackPanel>
+     <Grid x:Name="TrendPanel" Grid.Row="1" Margin="0,6,0,0" ToolTip="本次运行的价格轨迹 · 5 秒采样；不补造历史，断线留白。曲线颜色按所选区间首尾价格判断。">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid><TextBlock x:Name="TrendTitle" Text="本次运行" Foreground="{DynamicResource Muted}" FontSize="9" VerticalAlignment="Center"/><ComboBox x:Name="TrendSelector" Width="80" Height="22" HorizontalAlignment="Right" FontSize="10"  Cursor="Arrow" SelectionChanged="TrendSelectionChanged" AutomationProperties.Name="趋势时间跨度"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextBrush}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+      <Grid Grid.Row="1" Margin="0,4,0,0"><Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" VerticalAlignment="Center"/><Canvas x:Name="ChartCanvas" ClipToBounds="True" SizeChanged="ChartSizeChanged"><Path x:Name="ChartLine" Stroke="{DynamicResource Accent}" StrokeThickness="1.5" StrokeLineJoin="Round"/></Canvas><TextBlock x:Name="ChartEmpty" Text="采集中…" Foreground="{DynamicResource Muted}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
+     </Grid>
+    </Grid>
+    <Grid Grid.Row="2" x:Name="DetailsPanel" Margin="0,8,0,4"><StackPanel><TextBlock x:Name="HighLabel" Text="24H 最高 · USDT" FontSize="9" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="HighText" Text="—" FontSize="11" Margin="0,3,0,0"/></StackPanel><StackPanel HorizontalAlignment="Right"><TextBlock x:Name="LowLabel" Text="24H 最低 · USDT" FontSize="9" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="LowText" Text="—" FontSize="11" Margin="0,3,0,0" HorizontalAlignment="Right"/></StackPanel></Grid>
+    <TextBlock x:Name="FundingText" Grid.Row="3" FontSize="10" Margin="0,5,0,2" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}" Visibility="Collapsed"/>
+    <Grid Grid.Row="4" Margin="0,5,0,0"><StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="#DAB87C" Margin="0,0,5,0"/><TextBlock x:Name="StatusText" Text="连接中" Foreground="{DynamicResource Muted}" FontSize="10"/><TextBlock Text=" · Binance" Foreground="{DynamicResource Muted}" FontSize="10"/></StackPanel><TextBlock x:Name="TimeText" Text="—" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}" FontSize="10"/></Grid>
+   </Grid>
+  </Grid>
+ </Border>
+</UserControl>

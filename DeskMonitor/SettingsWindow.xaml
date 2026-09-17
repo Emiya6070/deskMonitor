@@ -1,0 +1,81 @@
+<Window x:Class="DeskMonitor.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="DeskMonitor 设置" Width="570" Height="790" MinWidth="510" MinHeight="520" Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="12" WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Loaded="WindowLoaded" Closed="WindowClosed">
+ <Grid Margin="24,18"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <TabControl x:Name="SettingsTabs" Background="Transparent" BorderThickness="0">
+   <TabItem Header="外观与性能">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,16,12,0">
+     <TextBlock Text="适合你的桌面" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16"/>
+     <TextBlock Text="内置皮肤" FontWeight="SemiBold" Margin="0,0,0,7"/>
+     <ComboBox x:Name="SkinChoice" Height="34" SelectionChanged="AppearanceSelectionChanged" AutomationProperties.Name="内置皮肤"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextBrush}" FontSize="12"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+     <TextBlock x:Name="SkinDescription" Foreground="{DynamicResource Muted}" Margin="0,7,0,12"/>
+     <Border x:Name="PreviewRoot" Background="{DynamicResource WindowBackground}" CornerRadius="12" Padding="12" Margin="0,0,0,16">
+      <StackPanel><TextBlock Text="外观预览 · 示例数据" Foreground="{DynamicResource Muted}" FontSize="10" Margin="0,0,0,8"/>
+       <Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource CardRadius}" Padding="14">
+        <StackPanel x:Name="PreviewContent"><TextBlock Text="BTC / USDT" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextBrush}"/><TextBlock x:Name="PreviewNumber" Text="76,240.80" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource UpBrush}" Margin="0,4,0,3"/><TextBlock Text="↗ +1.28% · 24H" Foreground="{DynamicResource UpBrush}" FontSize="11"/></StackPanel>
+       </Border>
+      </StackPanel>
+     </Border>
+     <Grid Margin="0,0,0,6"><TextBlock Text="文字与布局缩放"/><TextBlock x:Name="TextScaleValue" HorizontalAlignment="Right" Foreground="{DynamicResource Accent}"/></Grid>
+     <Slider x:Name="TextScaleSlider" Minimum="0.85" Maximum="1.3" Value="1" TickFrequency="0.05" IsSnapToTickEnabled="True" ValueChanged="AppearanceScaleChanged" Margin="0,0,0,14" AutomationProperties.Name="文字大小"/>
+     <Grid Margin="0,0,0,6"><TextBlock Text="价格与额度数字大小"/><TextBlock x:Name="NumberScaleValue" HorizontalAlignment="Right" Foreground="{DynamicResource Accent}"/></Grid>
+     <Slider x:Name="NumberScaleSlider" Minimum="0.9" Maximum="1.3" Value="1" TickFrequency="0.05" IsSnapToTickEnabled="True" ValueChanged="AppearanceScaleChanged" Margin="0,0,0,14" AutomationProperties.Name="数字大小"/>
+     <CheckBox x:Name="MonospaceOption" Content="等宽数字字体" Checked="AppearanceChecked" Unchecked="AppearanceChecked" Margin="0,0,0,14"/>
+     <CheckBox x:Name="HideHeaderOption" Content="中、大号隐藏标题栏" Margin="0,0,0,8"/>
+     <TextBlock Text="隐藏后仍可右键卡片或通过托盘打开设置。" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,0,0,14"/>
+     <Grid Margin="0,0,0,8"><TextBlock Text="小号卡片圆角"/><TextBlock x:Name="SmallRadiusValue" HorizontalAlignment="Right" Foreground="{DynamicResource Accent}"/></Grid>
+     <CheckBox x:Name="SmallRadiusDefault" Content="跟随皮肤" Checked="SmallRadiusChecked" Unchecked="SmallRadiusChecked" Margin="0,0,0,6"/>
+     <Slider x:Name="SmallRadiusSlider" Minimum="0" Maximum="24" Value="12" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="SmallRadiusChanged" AutomationProperties.Name="小号圆角尺寸"/>
+     <Border x:Name="SmallRadiusSample" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Height="38" Margin="0,6,0,14" Padding="12,0"><TextBlock Text="小号卡片圆角预览" VerticalAlignment="Center" Foreground="{DynamicResource Muted}" FontSize="11"/></Border>
+     <TextBlock Text="显示与省电" FontWeight="SemiBold" Margin="0,5,0,10"/>
+     <CheckBox x:Name="TrendsOption" Content="显示行情趋势图" Margin="0,0,0,12"/>
+     <TextBlock Text="界面刷新频率" Margin="0,0,0,7"/>
+     <ComboBox x:Name="RefreshChoice" Height="30" SelectedIndex="0" AutomationProperties.Name="刷新频率"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource TextBrush}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+     <TextBlock Text="较慢的界面刷新可减少绘制；行情连接保持实时。趋势图最多每 5 秒重绘，隐藏窗口时暂停绘制。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
+    </StackPanel></ScrollViewer>
+   </TabItem>
+   <TabItem Header="行情与行为">  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+   <StackPanel Margin="0,0,10,0">
+    <TextBlock Text="让信息适合你的桌面" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16"/>
+    <TextBlock Text="卡片样式" FontWeight="SemiBold" Margin="0,0,0,9"/>
+    <StackPanel Orientation="Horizontal" Margin="0,0,0,7"><RadioButton x:Name="SmallOption" Content="小 · 币种与价格" GroupName="Style" Margin="0,0,20,0"/><RadioButton x:Name="MediumOption" Content="中 · 行情与趋势" GroupName="Style" Margin="0,0,20,0"/><RadioButton x:Name="LargeOption" Content="大 · 完整行情" GroupName="Style"/></StackPanel>
+    <TextBlock Text="小号隐藏顶栏，右键卡片或通过托盘可再次进入设置。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,14"/>
+    <WrapPanel><CheckBox x:Name="PinnedOption" Content="始终置顶" Margin="0,0,24,10"/><CheckBox x:Name="SnapOption" Content="自动吸附屏幕边缘" Margin="0,0,24,10"/><CheckBox x:Name="ResizeOption" Content="允许手动调整大小" Margin="0,0,0,10"/></WrapPanel>
+    <CheckBox x:Name="StartupOption" Content="登录 Windows 时自动启动" Margin="0,0,0,5"/>
+    <TextBlock Text="开启缩放后，可拖动窗口边缘；切换样式会恢复该档默认尺寸。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"/>
+    <TextBlock Text="卡片顺序" FontWeight="SemiBold" Margin="0,0,0,7"/>
+    <TextBlock Text="选择卡片后上下移动，保存后生效。未开启的附加卡片会保留排序位置。" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,7"/>
+    <ListBox x:Name="CardOrderList" Height="140" DisplayMemberPath="Label" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" AutomationProperties.Name="全部卡片顺序" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,14"><Button Content="上移" Click="MoveCardUp"/><Button Content="下移" Click="MoveCardDown"/></StackPanel>
+    <Grid Margin="0,0,0,7"><TextBlock Text="显示的币种" FontWeight="SemiBold"/><TextBlock x:Name="CountText" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}" FontSize="11"/></Grid>
+    <ListBox x:Name="WatchList" Height="119" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" DisplayMemberPath="Label" SelectionMode="Single" AutomationProperties.Name="已选币种" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,14"><Button Content="移除" Click="RemoveMarket"/></StackPanel>
+    <TextBlock Text="行情数据源代理" FontWeight="SemiBold" Margin="0,0,0,7"/>
+    <ComboBox x:Name="ProxyChoice" Height="30" SelectionChanged="ProxyChanged" AutomationProperties.Name="行情代理模式"/>
+    <TextBox x:Name="ProxyAddress" Height="30" Margin="0,6,0,0" Padding="6" Background="{DynamicResource CardBackground}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" AutomationProperties.Name="行情代理地址"/>
+    <TextBlock Text="HTTP / SOCKS5，例如 http://127.0.0.1:7890。保存后用于行情目录与实时连接；Codex 沿用本机网络配置。" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,6,0,14"/>
+    <TextBlock Text="添加行情" FontWeight="SemiBold" Margin="0,0,0,9"/>
+    <StackPanel Orientation="Horizontal" Margin="0,0,0,9"><RadioButton x:Name="SpotOption" Content="现货" GroupName="Market" IsChecked="True" Checked="MarketChanged" Margin="0,0,24,0"/><RadioButton x:Name="FuturesOption" Content="USDT 永续" GroupName="Market" Checked="MarketChanged" Margin="0,0,24,0"/><RadioButton x:Name="UsdcOption" Content="USDC 永续" GroupName="Market" Checked="MarketChanged"/></StackPanel>
+    <TextBox x:Name="SearchBox" Height="31" Padding="8,5" Background="{DynamicResource CardBackground}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" CaretBrush="{DynamicResource Accent}" TextChanged="SearchChanged" AutomationProperties.Name="搜索币种" ToolTip="搜索币种代码，例如 BTC、ETH、SOL"/>
+    <TextBlock Text="输入代码搜索（如 BTC、TSLA）；股票等 TradFi 合约可在 USDT 永续中选择。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,7"/>
+    <ListBox x:Name="CatalogList" Height="128" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" DisplayMemberPath="Label" AutomationProperties.Name="可添加币种" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"/>
+    <Grid Margin="0,6,0,0"><TextBlock x:Name="CatalogStatus" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" MaxWidth="310" HorizontalAlignment="Left" TextWrapping="Wrap"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="刷新" Click="ReloadCatalog"/><Button Content="添加所选" Click="AddMarket" Background="{DynamicResource SelectedBrush}"/></StackPanel></Grid>
+   </StackPanel>
+  </ScrollViewer>
+   </TabItem>
+   <TabItem Header="附加显示">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,16,12,0">
+     <TextBlock Text="行情之外的信息" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16"/>
+     <TextBlock Text="Codex 用量" FontWeight="SemiBold" Margin="0,0,0,10"/>
+    <CheckBox x:Name="UsageOption" Content="显示 Codex 用量卡片" Checked="UsageChanged" Unchecked="UsageChanged" Margin="0,0,0,6"/>
+    <Grid Margin="0,10,0,6"><TextBlock Text="用量卡片高度"/><TextBlock x:Name="UsageHeightValue" HorizontalAlignment="Right" Foreground="{DynamicResource Accent}"/></Grid>
+    <Slider x:Name="UsageHeightSlider" Minimum="0" Maximum="120" TickFrequency="4" IsSnapToTickEnabled="True" ValueChanged="UsageHeightChanged" AutomationProperties.Name="用量卡片额外高度" Margin="0,0,0,6"/>
+    <TextBlock Text="0 为紧凑高度；向右拖动增加留白。缺少用量周期时自动收紧，字体放大时自动撑开。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"/>
+    <TextBlock Text="显示账户剩余额度与重置时间，每分钟更新。使用本机 Codex 的 ChatGPT 登录状态。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
+    <DockPanel Margin="0,0,0,5"><Button DockPanel.Dock="Right" Content="选择…" Click="ChooseCodex"/><TextBox x:Name="CodexPath" AutomationProperties.Name="Codex 程序路径" ToolTip="留空自动查找，也可选择 codex.exe" Background="{DynamicResource CardBackground}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" Padding="6"/></DockPanel>
+    <TextBlock Text="Codex 程序路径可留空自动查找；不读取会话正文。" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,0,0,16"/>
+     <TextBlock Text="卡片的位置可在“行情与行为 → 卡片顺序”中调整。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap"/>
+    </StackPanel></ScrollViewer>
+   </TabItem>
+  </TabControl>
+  <Grid Grid.Row="1" Margin="0,15,0,0"><TextBlock x:Name="ErrorText" Foreground="{DynamicResource DownBrush}" MaxWidth="340" HorizontalAlignment="Left" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="11"/><StackPanel HorizontalAlignment="Right" Orientation="Horizontal"><Button Content="取消" IsCancel="True" Margin="0,0,8,0"/><Button Content="保存设置" Click="SaveClicked" Background="{DynamicResource SelectedBrush}" Padding="16,8"/></StackPanel></Grid>
+ </Grid>
+</Window>
