@@ -8,8 +8,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.5</Version>
-    <ReleaseDate>2026-09-17</ReleaseDate>
+    <Version>0.3.6</Version>
+    <ReleaseDate>2026-09-18</ReleaseDate>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../DeskMonitor.Core/DeskMonitor.Core.csproj" /></ItemGroup>
   <ItemGroup><AssemblyMetadata Include="ReleaseDate" Value="$(ReleaseDate)" /></ItemGroup>

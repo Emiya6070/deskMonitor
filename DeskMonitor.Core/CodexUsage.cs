@@ -122,7 +122,8 @@ public static class CodexUsageClient
             try
             {
                 process.StandardInput.Close();
-                using var exitWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var exitWait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                exitWait.CancelAfter(TimeSpan.FromSeconds(2));
                 try { await process.WaitForExitAsync(exitWait.Token); }
                 catch (OperationCanceledException)
                 {

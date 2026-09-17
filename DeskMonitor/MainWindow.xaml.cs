@@ -34,13 +34,15 @@ public partial class MainWindow : Window
     private Preferences _preferences = Preferences.Normalize(new());
     private CancellationTokenSource? _subscription;
     private Task _streamTask = Task.CompletedTask;
-    private bool _closing, _ready, _settingsOpen;
+    private bool _closing, _closeReady, _ready, _settingsOpen;
     private SettingsWindow? _settings;
     private UsageCard? _usageCard;
     private readonly Dictionary<string, FundingQuote> _funding = new();
     private CodexUsage? _usage;
     private string? _usageError;
     private Task _usageTask = Task.CompletedTask;
+    private Task _hideTask = Task.CompletedTask;
+    private CancellationTokenSource? _hideRequest;
     private CancellationTokenSource? _usageRequest;
     private DateTimeOffset _nextUsageRead;
     private SnapDrag? _snapDrag;
@@ -179,7 +181,9 @@ public partial class MainWindow : Window
     {
         try
         {
-            var usage = await CodexUsageClient.ReadAsync(_preferences.CodexExecutable, token);
+            var executable = _preferences.CodexExecutable;
+            // Process startup and tree termination can block; keep them off the UI thread.
+            var usage = await Task.Run(() => CodexUsageClient.ReadAsync(executable, token), token);
             if (!token.IsCancellationRequested) { _usage = usage; _usageError = null; }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { _nextUsageRead = DateTimeOffset.MinValue; }
@@ -308,8 +312,28 @@ public partial class MainWindow : Window
         PinButton.ToolTip = Topmost ? "取消置顶" : "置顶显示";
         SavePreferences();
     }
-    private void HideToTray(object sender, RoutedEventArgs e) { SavePreferences(); Hide(); }
-    internal void ShowWidget() { Show(); WindowState = WindowState.Normal; Activate(); }
+    private async void HideToTray(object sender, RoutedEventArgs e)
+    {
+        if (_closing || !IsVisible || !_hideTask.IsCompleted) return;
+        SavePreferences();
+        _timer.Stop();
+        _usageRequest?.Cancel();
+        _hideTask = HideToTrayAsync();
+        await _hideTask;
+    }
+    private async Task HideToTrayAsync()
+    {
+        using var request = new CancellationTokenSource();
+        _hideRequest = request;
+        try { await TrayTransition.HideAsync(this, _dockedCorners, request.Token); }
+        catch (OperationCanceledException) when (request.IsCancellationRequested) { }
+        finally
+        {
+            _hideRequest = null;
+            if (IsVisible && _ready && !_closing) _timer.Start();
+        }
+    }
+    internal void ShowWidget() { if (_closing) return; _hideRequest?.Cancel(); Show(); WindowState = WindowState.Normal; Activate(); }
     private void ExitApp(object sender, RoutedEventArgs e) => Close();
     private void DragWindow(object sender, MouseButtonEventArgs e)
     {
@@ -331,21 +355,26 @@ public partial class MainWindow : Window
     }
     private async void WindowClosing(object? sender, CancelEventArgs e)
     {
-        if (_closing) return;
+        if (_closeReady) return;
         e.Cancel = true;
+        if (_closing) return;
         SavePreferences();
         _closing = true;
         _settings?.Close();
         _timer.Stop();
+        _hideRequest?.Cancel();
+        Hide();
+        _tray.Visible = false;
         _subscription?.Cancel();
         _usageRequest?.Cancel();
-        await _usageTask;
+        await Task.WhenAll(_usageTask, _streamTask, _hideTask);
         _usageRequest?.Dispose();
-        await _streamTask;
-        _tray.Visible = false;
+        _usageRequest = null;
         _tray.ContextMenuStrip?.Dispose();
         _tray.Dispose(); _trayIcon.Dispose(); _subscription?.Dispose(); _feed.Dispose();
-        Close();
+        _closeReady = true;
+        // Tasks may already be complete; do not re-enter Close during Closing.
+        _ = Dispatcher.BeginInvoke(new Action(Close));
     }
     private void WindowSourceInitialized(object? sender, EventArgs e)
     {

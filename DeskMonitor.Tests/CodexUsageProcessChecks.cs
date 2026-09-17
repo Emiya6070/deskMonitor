@@ -103,7 +103,7 @@ internal static class CodexUsageProcessChecks
             var cancelled = false;
             try { await Read("hang", cancel.Token); }
             catch (OperationCanceledException) when (cancel.IsCancellationRequested) { cancelled = true; }
-            check(cancelled && elapsed.Elapsed < TimeSpan.FromSeconds(6), "cancelling a stuck quota process completes promptly");
+            check(cancelled && elapsed.Elapsed < TimeSpan.FromSeconds(2), "cancelling a stuck quota process skips the two-second exit grace");
             check((await Read("success")).Primary is not null, "quota refresh recovers after cancellation");
             elapsed.Restart();
             var timedOut = false;

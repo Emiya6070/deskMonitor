@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.5-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.6-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；行情观察不需要 Codex 或币安 API Key。
 
@@ -53,7 +53,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 - **拖动**：按住价格、图表或空白处移动整个挂件。按钮、输入框、滚动条保留自身操作。
 - **吸附**：开启「自动吸附屏幕边缘」后，拖动到当前显示器工作区边缘 12 DIP 内时吸附，避开任务栏。吸附后，鼠标沿离开边缘的方向累计移动 24 DIP 即可拖走；横纵方向分别判断，慢慢拖动也能脱离。设置中可以关闭。贴住屏幕工作区的四个边角时，对应圆角自动变为直角，拖离后恢复；其余圆角保留。
 - **自启动**：开启「登录 Windows 时自动启动」后写入当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskMonitor`。无需管理员权限；关闭开关只移除本应用的项。默认关闭。Windows 任务管理器中的禁用设置可能覆盖启动项。
-- **托盘与单实例**：挂件和设置窗口均不显示任务栏图标，仅保留通知区域的托盘图标（Windows 可能将其放在隐藏图标区）。减号收起，双击托盘恢复，托盘右键可打开设置/退出。再次运行程序会恢复现有挂件，不产生重复行情进程。叉号彻底退出。
+- **托盘与单实例**：挂件和设置窗口均不显示任务栏图标，仅保留通知区域的托盘图标（Windows 可能将其放在隐藏图标区）。减号以短暂淡出动画收起，双击托盘恢复，托盘右键可打开设置/退出。动画遵循 Windows 动画开关，仅在收起时创建临时快照，恢复或退出会取消未完成的动画。再次运行程序会恢复现有挂件，不产生重复行情进程。叉号退出时先隐藏窗口和托盘图标，再完成后台清理。
 - **持久化**：设置保存到 `%LOCALAPPDATA%/DeskMonitor/settings.json`；旧版单币种设置自动迁移，保留币种、置顶及位置。
 
 ## 行情数据源代理
@@ -72,6 +72,8 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 额度查询返回内部错误 `-32603` 时，清理该次进程后等待 2 秒，最多再读一次；再次失败才显示错误，随后恢复每分钟查询。初始化失败、其他错误码、缺失额度和超时不触发这次额外重试。收起挂件或关闭卡片会取消重试等待；单次尝试仍受上述超时限制。内部错误不等同于未登录，无法仅凭错误码判断底层网络或服务原因。
 
+Codex 进程的启动和清理在后台执行；主动取消查询时跳过正常退出的 2 秒宽限，立即终止本次查询进程，避免退出或收起时阻塞界面。
+
 ## 行情口径
 
 提供币安 **USDT 现货、USDT / USDC 本位永续合约的最新成交价**。不是标记价格或指数价格，未包含币本位、交割合约或期权；没有交易/下单功能，也不需要 API Key。
@@ -89,7 +91,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 USDT 与 USDC 合约共用一条连接，现货和合约合计最多两条，故障分别处理；修改显示样式不重连。更改订阅前先取消旧连接。真实网络中断使用 2–30 秒退避重连，30 秒无数据则重建连接；不自动改换交易所。
 
-币种目录按需流式读取并在本次运行缓存，可手动刷新；不周期 HTTP 轮询。UI 默认每秒刷新一次，曲线每 5 秒最多采样及重建一次，每项只保存最近一小时、最多 721 个点（含边界）；小号宽度不足或关闭趋势图时不创建图表数据数组。用量数据未变化时，仅在显示分钟、过期或重置状态变化时更新；复用冻结的主题画刷。隐藏后停止 UI 刷新和采样，仅保留行情连接，恢复时保留空白区间。无持续动画、透明分层窗口或浏览器进程。程序依赖的 .NET / WPF / 图形驱动仍有常驻内存开销，实测与限制见 [验证记录](docs/verification.md)。
+币种目录按需流式读取并在本次运行缓存，可手动刷新；不周期 HTTP 轮询。UI 默认每秒刷新一次，曲线每 5 秒最多采样及重建一次，每项只保存最近一小时、最多 721 个点（含边界）；小号宽度不足或关闭趋势图时不创建图表数据数组。用量数据未变化时，仅在显示分钟、过期或重置状态变化时更新；复用冻结的主题画刷。隐藏后停止 UI 刷新和采样，仅保留行情连接，恢复时保留空白区间。无常驻动画、常驻透明分层窗口或浏览器进程。程序依赖的 .NET / WPF / 图形驱动仍有常驻内存开销，实测与限制见 [验证记录](docs/verification.md)。
 
 官方协议：[现货 WebSocket](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md)、[合约市场行情](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/ws-streams/market)、[合约 REST](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data)。公开接口不等于任意商业再分发授权；本版本用于用户本机观察，保留来源标识。
 
