@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.4-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.5-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；行情观察不需要 Codex 或币安 API Key。
 
@@ -24,6 +24,8 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 ## 设置与使用
 
 点击顶栏齿轮，或**右键卡片 → 设置与币种管理**。小号隐藏顶栏，右键和托盘设置入口始终可用。
+
+**右键卡片 → 置顶显示**可直接开关置顶，勾选代表已开启；与顶栏图钉、设置中的“始终置顶”共用状态，并保存到下次启动。
 
 「关于」页显示当前版本、更新日期、运行环境，并提供 GitHub 项目主页及版本说明/下载链接；页面沿用当前皮肤。
 

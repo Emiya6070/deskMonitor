@@ -54,7 +54,17 @@
     <Style TargetType="RadioButton"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
     <Style TargetType="ListBox"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Style>
     <Style TargetType="ContextMenu"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="5"><StackPanel IsItemsHost="True"/></Border></ControlTemplate></Setter.Value></Setter></Style>
-    <Style TargetType="MenuItem"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Border x:Name="MenuRow" Background="Transparent" CornerRadius="5" Padding="12,7"><ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="MenuRow" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+    <Style TargetType="MenuItem"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
+      <Border x:Name="MenuRow" Background="Transparent" CornerRadius="5" Padding="12,7"><Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions>
+        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+        <Path x:Name="CheckMark" Grid.Column="1" Data="M 0 4 L 3 7 L 9 0" Stroke="{DynamicResource Accent}" StrokeThickness="1.8" HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Hidden"/>
+      </Grid></Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="MenuRow" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter></Style>
     <Style TargetType="ScrollBar">
       <Setter Property="Width" Value="7"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar"><Track x:Name="PART_Track" IsDirectionReversed="True"><Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource BorderBrush}" CornerRadius="3" Margin="1"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb></Track></ControlTemplate></Setter.Value></Setter>

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -60,6 +61,10 @@ public partial class MainWindow : Window
         _tray = new Forms.NotifyIcon { Icon = _trayIcon, Text = "DeskMonitor · 右键管理币种和样式", Visible = true, ContextMenuStrip = trayMenu };
         _tray.DoubleClick += (_, _) => Dispatcher.Invoke(ShowWidget);
         var menu = new ContextMenu();
+        var pinItem = new MenuItem { Header = "置顶显示", IsCheckable = true };
+        pinItem.SetBinding(MenuItem.IsCheckedProperty, new Binding(nameof(Topmost)) { Source = this, Mode = BindingMode.OneWay });
+        pinItem.Click += TogglePin;
+        menu.Items.Add(pinItem);
         AddMenu(menu, "设置与币种管理", ShowSettings);
         AddMenu(menu, "刷新 Codex 用量", () => StartUsageRefresh(true));
         AddMenu(menu, "收起到托盘", () => HideToTray(this, new RoutedEventArgs()));
