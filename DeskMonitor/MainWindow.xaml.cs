@@ -311,7 +311,8 @@ public partial class MainWindow : Window
         if (e.LeftButton != MouseButtonState.Pressed) return;
         for (var parent = e.OriginalSource as DependencyObject; parent is not null && parent != this;
              parent = parent is FrameworkContentElement content ? content.Parent : VisualTreeHelper.GetParent(parent))
-            if (parent is ButtonBase or TextBoxBase or Selector or ScrollBar or Thumb) return;
+            // Popup items have a separate visual tree: walking upward never reaches their ComboBox.
+            if (parent is ButtonBase or TextBoxBase or Selector or ComboBoxItem or ScrollBar or Thumb) return;
         e.Handled = true;
         DragMove();
     }
