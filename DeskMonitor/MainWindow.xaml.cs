@@ -48,6 +48,8 @@ public partial class MainWindow : Window
     private SnapDrag? _snapDrag;
     private DockedCorners _dockedCorners;
     private bool _updatingCorners;
+    private ShowDesktopInput? _desktopInput;
+    private bool _desktopHidden, _desktopTransition;
 
     public MainWindow()
     {
@@ -315,25 +317,48 @@ public partial class MainWindow : Window
     private async void HideToTray(object sender, RoutedEventArgs e)
     {
         if (_closing || !IsVisible || !_hideTask.IsCompleted) return;
+        _desktopHidden = false;
         SavePreferences();
         _timer.Stop();
         _usageRequest?.Cancel();
-        _hideTask = HideToTrayAsync();
+        StartTransition(false, false);
         await _hideTask;
     }
-    private async Task HideToTrayAsync()
+    private async void ToggleDesktop()
     {
-        using var request = new CancellationTokenSource();
+        if (_closing || !_ready || _settingsOpen) return;
+        if (!_desktopHidden && !IsVisible && (!_desktopTransition || _hideTask.IsCompleted)) return;
+        _desktopHidden = !_desktopHidden;
+        if (_desktopHidden) { _timer.Stop(); _usageRequest?.Cancel(); }
+        StartTransition(!_desktopHidden, true);
+        await _hideTask;
+    }
+    private void StartTransition(bool show, bool desktop)
+    {
+        _hideRequest?.Cancel();
+        _desktopTransition = desktop;
+        var previous = _hideTask;
+        var request = new CancellationTokenSource();
         _hideRequest = request;
-        try { await TrayTransition.HideAsync(this, _dockedCorners, request.Token); }
+        _hideTask = TransitionAsync(previous, request, show, desktop);
+    }
+    private async Task TransitionAsync(Task previous, CancellationTokenSource request, bool show, bool desktop)
+    {
+        try
+        {
+            await previous;
+            request.Token.ThrowIfCancellationRequested();
+            await TrayTransition.RunAsync(this, _dockedCorners, show, desktop, request.Token);
+        }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
         finally
         {
-            _hideRequest = null;
+            if (_hideRequest == request) _hideRequest = null;
+            request.Dispose();
             if (IsVisible && _ready && !_closing) _timer.Start();
         }
     }
-    internal void ShowWidget() { if (_closing) return; _hideRequest?.Cancel(); Show(); WindowState = WindowState.Normal; Activate(); }
+    internal void ShowWidget() { if (_closing) return; _desktopHidden = false; _hideRequest?.Cancel(); Show(); WindowState = WindowState.Normal; Activate(); }
     private void ExitApp(object sender, RoutedEventArgs e) => Close();
     private void DragWindow(object sender, MouseButtonEventArgs e)
     {
@@ -360,6 +385,7 @@ public partial class MainWindow : Window
         if (_closing) return;
         SavePreferences();
         _closing = true;
+        _desktopInput?.Dispose(); _desktopInput = null;
         _settings?.Close();
         _timer.Stop();
         _hideRequest?.Cancel();
@@ -388,11 +414,14 @@ public partial class MainWindow : Window
         var dark = 1;
         WindowPlacement.DwmSetWindowAttribute(handle, 20, ref dark, sizeof(int));
         HwndSource.FromHwnd(handle).AddHook(WindowMessage);
+        _desktopInput = new ShowDesktopInput(handle);
         _dockedCorners = DockedCorners.None;
         UpdateDockedCorners();
     }
     private IntPtr WindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Leave WM_INPUT unhandled so WPF/DefWindowProc performs native cleanup.
+        if (message == 0x00FF && _desktopInput?.Read(lParam) == true) Dispatcher.BeginInvoke(ToggleDesktop);
         if (message == 0x0231 && _preferences.SnapToEdges) _snapDrag = WindowPlacement.BeginSnapDrag(hwnd);
         if (message == 0x0216 && _preferences.SnapToEdges)
         {

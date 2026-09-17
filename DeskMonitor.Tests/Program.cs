@@ -9,6 +9,22 @@ var now = DateTimeOffset.UtcNow;
 var payload = JsonSerializer.Serialize(new { e = "24hrTicker", E = now.ToUnixTimeMilliseconds(), s = "BTCUSDT", c = "110", o = "100", h = "120", l = "90" });
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception($"FAIL: {name}"); Console.WriteLine($"PASS: {name}"); Interlocked.Increment(ref passed); }
+var desktopKeys = new ShowDesktopKeys();
+Check(!desktopKeys.Update(0x44, false), "plain D does not toggle desktop widget");
+desktopKeys.Update(0x44, true);
+desktopKeys.Update(0x5B, false);
+Check(desktopKeys.Update(0x44, false), "left Win+D toggles widget");
+Check(!desktopKeys.Update(0x44, false) && !desktopKeys.Update(0x44, true), "held D repeats and key-up do not toggle");
+Check(desktopKeys.Update(0x44, false), "second D press while Win held toggles again");
+desktopKeys.Reset(); desktopKeys.Update(0x5C, false);
+Check(desktopKeys.Update(0x44, false), "right Win+D toggles widget");
+foreach (var modifier in new ushort[] { 0x10, 0x11, 0x12, 0xA1, 0xA3, 0xA5 })
+{
+    desktopKeys.Reset(); desktopKeys.Update(0x5B, false); desktopKeys.Update(modifier, false);
+    Check(!desktopKeys.Update(0x44, false), "extra Shift/Ctrl/Alt does not trigger Win+D animation");
+}
+desktopKeys.Reset(); desktopKeys.Update(0x5B, false); desktopKeys.Update(0x5B, true);
+Check(!desktopKeys.Update(0x44, false), "released Windows key does not leave a stale shortcut");
 void Reject(string json, string name)
 {
     try { MarketParser.ParseTicker(json, "BTCUSDT", true, now); }
