@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.3-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.4-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；行情观察不需要 Codex 或币安 API Key。
 
@@ -19,9 +19,13 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 编译需要 .NET 8 SDK。保留 `artifacts/app` 整个目录；制作 Windows x64 发布包可运行 `./scripts/package.ps1`。
 
+发布新版本时，在 `DeskMonitor/DeskMonitor.csproj` 同步维护 `Version` 和 `ReleaseDate`（`yyyy-MM-dd`）；“关于”页直接读取编译后的版本与发布日期，不使用文件复制时间。
+
 ## 设置与使用
 
 点击顶栏齿轮，或**右键卡片 → 设置与币种管理**。小号隐藏顶栏，右键和托盘设置入口始终可用。
+
+「关于」页显示当前版本、更新日期、运行环境，并提供 GitHub 项目主页及版本说明/下载链接；页面沿用当前皮肤。
 
 「外观与性能」页可选择五套内置皮肤，保存前提供示例预览：森林绿（原有配色）、石墨（冷灰深色）、纸白（简洁浅色）、柔雾紫（柔和圆角）、冰川（深蓝静态渐层）。行情、用量、窗口和设置页共用主题。设计参考 [Fluent 2 的色彩与材质](https://fluent2.microsoft.design/material)、[Material 3](https://m3.material.io/) 与 [Apple 的玻璃层次设计](https://developer.apple.com/videos/play/wwdc2025/219/)；使用纯色或静态渐变，没有背景模糊和实时折射。
 

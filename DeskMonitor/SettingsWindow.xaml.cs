@@ -1,15 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Navigation;
 using DeskMonitor.Core;
 
 namespace DeskMonitor;
@@ -34,6 +40,12 @@ public partial class SettingsWindow : Window
             var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
             source.Freeze(); Icon = source;
         }
+        AboutIcon.Source = Icon;
+        var assembly = typeof(SettingsWindow).Assembly;
+        AboutVersion.Text = "v" + assembly.GetName().Version!.ToString(3);
+        var releaseDate = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "ReleaseDate").Value!;
+        AboutReleaseDate.Text = DateOnly.ParseExact(releaseDate, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        AboutRuntime.Text = $".NET {Environment.Version} · {RuntimeInformation.ProcessArchitecture}";
         preferences = Preferences.Normalize(preferences);
         _original = preferences;
         _feed = new BinanceFeed(preferences.Proxy);
@@ -75,6 +87,13 @@ public partial class SettingsWindow : Window
         { StartupOption.IsEnabled = false; ErrorText.Text = "无法读取自启动设置：" + ex.Message; }
         UpdateCount();
         SyncCardOrder();
+    }
+    private void OpenAboutLink(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        { ErrorText.Text = "无法打开链接：" + ex.Message; }
     }
     private async void WindowLoaded(object sender, RoutedEventArgs e) { _ready = true; await LoadCatalogAsync(); }
     private void WindowClosed(object? sender, EventArgs e) { _ready = false; _lifetime.Cancel(); _feed.Dispose(); }

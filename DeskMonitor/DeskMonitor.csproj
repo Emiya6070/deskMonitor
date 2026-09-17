@@ -8,8 +8,10 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.3</Version>
+    <Version>0.3.4</Version>
+    <ReleaseDate>2026-09-17</ReleaseDate>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../DeskMonitor.Core/DeskMonitor.Core.csproj" /></ItemGroup>
+  <ItemGroup><AssemblyMetadata Include="ReleaseDate" Value="$(ReleaseDate)" /></ItemGroup>
   <ItemGroup><RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="9" /></ItemGroup>
 </Project>
