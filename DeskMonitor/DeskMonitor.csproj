@@ -8,7 +8,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../DeskMonitor.Core/DeskMonitor.Core.csproj" /></ItemGroup>
   <ItemGroup><RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="9" /></ItemGroup>

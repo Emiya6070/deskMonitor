@@ -77,6 +77,17 @@ public static class CodexUsageClient
     }
     public static async Task<CodexUsage> ReadAsync(string? configuredPath, CancellationToken cancellationToken)
     {
+        try { return await ReadOnceAsync(configuredPath, cancellationToken); }
+        catch (CodexRpcException ex) when (ex.Retryable && !cancellationToken.IsCancellationRequested)
+        {
+            // Observed account/rateLimits/read returning -32603 and succeeding on
+            // the next read. Retry only once, after the failed process is cleaned up.
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            return await ReadOnceAsync(configuredPath, cancellationToken);
+        }
+    }
+    private static async Task<CodexUsage> ReadOnceAsync(string? configuredPath, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
@@ -96,7 +107,7 @@ public static class CodexUsageClient
         var stage = "初始化";
         try
         {
-            await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"desk_monitor\",\"title\":\"DeskMonitor\",\"version\":\"0.3.2\"}}}".AsMemory(), token);
+            await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"desk_monitor\",\"title\":\"DeskMonitor\",\"version\":\"0.3.3\"}}}".AsMemory(), token);
             await ReadResponseAsync(process, 1, token);
             stage = "读取额度";
             await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\",\"params\":{}}".AsMemory(), token);
@@ -145,12 +156,17 @@ public static class CodexUsageClient
             {
                 // Keep the error code for diagnosis without displaying raw server messages,
                 // which can contain private paths, URLs or account details.
-                var code = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var number)
-                    && number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out var n) ? $"（错误码 {n}）" : "";
-                throw new IOException($"Codex {(id == 1 ? "初始化" : "读取账户额度")}失败{code}；请检查登录和网络。");
+                int? code = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var number)
+                    && number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out var n) ? n : null;
+                var label = code is null ? "" : $"（错误码 {code}）";
+                throw new CodexRpcException($"Codex {(id == 1 ? "初始化" : "读取账户额度")}失败{label}；请稍后重试。", id == 2 && code == -32603);
             }
             if (!root.TryGetProperty("result", out var result)) throw new InvalidDataException("Codex 查询响应缺少结果。");
             return result.Clone();
         }
+    }
+    private sealed class CodexRpcException(string message, bool retryable) : IOException(message)
+    {
+        public bool Retryable { get; } = retryable;
     }
 }
