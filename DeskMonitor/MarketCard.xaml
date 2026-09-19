@@ -25,7 +25,7 @@
     </Grid>
     <Grid Grid.Row="2" x:Name="DetailsPanel" Margin="0,8,0,4"><StackPanel><TextBlock x:Name="HighLabel" Text="24H 最高 · USDT" FontSize="9" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="HighText" Text="—" FontSize="11" Margin="0,3,0,0"/></StackPanel><StackPanel HorizontalAlignment="Right"><TextBlock x:Name="LowLabel" Text="24H 最低 · USDT" FontSize="9" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="LowText" Text="—" FontSize="11" Margin="0,3,0,0" HorizontalAlignment="Right"/></StackPanel></Grid>
     <TextBlock x:Name="FundingText" Grid.Row="3" FontSize="10" Margin="0,5,0,2" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Muted}" Visibility="Collapsed"/>
-    <Grid Grid.Row="4" Margin="0,5,0,0"><StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="#DAB87C" Margin="0,0,5,0"/><TextBlock x:Name="StatusText" Text="连接中" Foreground="{DynamicResource Muted}" FontSize="10"/><TextBlock Text=" · Binance" Foreground="{DynamicResource Muted}" FontSize="10"/></StackPanel><TextBlock x:Name="TimeText" Text="—" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}" FontSize="10"/></Grid>
+    <Grid x:Name="StatusPanel" Grid.Row="4" Margin="0,5,0,0"><StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="5" Height="5" Fill="#DAB87C" Margin="0,0,5,0"/><TextBlock x:Name="StatusText" Text="连接中" Foreground="{DynamicResource Muted}" FontSize="10"/><TextBlock Text=" · Binance" Foreground="{DynamicResource Muted}" FontSize="10"/></StackPanel><TextBlock x:Name="TimeText" Text="—" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}" FontSize="10"/></Grid>
    </Grid>
   </Grid>
  </Border>

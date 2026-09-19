@@ -43,6 +43,12 @@ public sealed class SnapDrag
 }
 public static class WidgetLayout
 {
+    public static bool UseSavedSize(bool resetSize, bool allowResize, bool lockCustomSize)
+        => !resetSize && (allowResize || lockCustomSize);
+    public static bool ShouldResetSize(bool layoutChanged, bool wasResizeAllowed, bool resizeAllowed, bool lockCustomSize = false)
+        => layoutChanged && !lockCustomSize && !(wasResizeAllowed && !resizeAllowed);
+    public static bool ShouldAutoFit(bool allowResize, bool lockCustomSize)
+        => !allowResize && !lockCustomSize;
     public static DockedCorners CornersAtWorkArea(PixelRect rect, PixelRect area)
     {
         // One physical pixel accommodates rounding between WPF DIPs and monitor pixels.
@@ -53,14 +59,19 @@ public static class WidgetLayout
         return (left && top ? DockedCorners.TopLeft : 0) | (right && top ? DockedCorners.TopRight : 0)
             | (right && bottom ? DockedCorners.BottomRight : 0) | (left && bottom ? DockedCorners.BottomLeft : 0);
     }
-    public static double MarketHeight(CardStyle style, double numberScale = 1) => (style switch { CardStyle.Small => 54, CardStyle.Medium => 150, CardStyle.Large => 266, _ => throw new ArgumentOutOfRangeException(nameof(style)) }) + (style == CardStyle.Small ? 23 : 43) * Math.Max(0, numberScale - 1);
+    public static double MarketHeight(CardStyle style, double numberScale = 1, double heightAdjustment = 0)
+    {
+        if (!double.IsFinite(heightAdjustment) || heightAdjustment is < -12 or > 48) throw new ArgumentOutOfRangeException(nameof(heightAdjustment));
+        return (style switch { CardStyle.Small => 54, CardStyle.Medium => 150, CardStyle.Large => 266, _ => throw new ArgumentOutOfRangeException(nameof(style)) })
+            + (style == CardStyle.Small ? 23 : 43) * Math.Max(0, numberScale - 1) + heightAdjustment;
+    }
     public static double FundingHeight(CardStyle style) => style == CardStyle.Small ? 0 : 24;
     public static double UsageHeight(CardStyle style, double numberScale = 1) => (style switch { CardStyle.Small => 96, CardStyle.Medium => 188, CardStyle.Large => 232, _ => throw new ArgumentOutOfRangeException(nameof(style)) }) + 36 * Math.Max(0, numberScale - 1);
-    public static (double Width, double Height) Preset(CardStyle style, int count, bool usage = false, double textScale = 1, double numberScale = 1, bool hideHeader = false, int contractCount = 0) => style switch
+    public static (double Width, double Height) Preset(CardStyle style, int count, bool usage = false, double textScale = 1, double numberScale = 1, bool hideHeader = false, int contractCount = 0, double marketHeightAdjustment = 0, int? marketCount = null) => style switch
     {
-        CardStyle.Small => (280 * textScale, 12 + (count * MarketHeight(style, numberScale) + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
-        CardStyle.Medium => (360 * textScale, (hideHeader ? 22 : 66) + (count * MarketHeight(style, numberScale) + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
-        CardStyle.Large => (400 * textScale, (hideHeader ? 22 : 66) + (count * MarketHeight(style, numberScale) + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
+        CardStyle.Small => (280 * textScale, 12 + (count * MarketHeight(style, numberScale) + (marketCount ?? count) * marketHeightAdjustment + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
+        CardStyle.Medium => (360 * textScale, (hideHeader ? 22 : 66) + (count * MarketHeight(style, numberScale) + (marketCount ?? count) * marketHeightAdjustment + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
+        CardStyle.Large => (400 * textScale, (hideHeader ? 22 : 66) + (count * MarketHeight(style, numberScale) + (marketCount ?? count) * marketHeightAdjustment + contractCount * FundingHeight(style) + (usage ? UsageHeight(style, numberScale) : 0)) * textScale),
         _ => throw new ArgumentOutOfRangeException(nameof(style))
     };
     public static PixelRect Snap(PixelRect rect, PixelRect area, int distance)

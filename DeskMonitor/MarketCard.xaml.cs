@@ -22,7 +22,7 @@ public partial class MarketCard : UserControl
     public event EventHandler? TrendSpanChanged;
     private sealed record TrendOption(int Minutes, string Label);
     public MarketSymbol Market { get; }
-    public MarketCard(MarketSymbol market, CardStyle style, int trendMinutes = 2, double textScale = 1, double numberScale = 1, bool monospace = false, bool showTrends = true, double? smallCornerRadius = null)
+    public MarketCard(MarketSymbol market, CardStyle style, int trendMinutes = 2, double textScale = 1, double numberScale = 1, bool monospace = false, bool showTrends = true, double? smallCornerRadius = null, double heightAdjustment = 0)
     {
         InitializeComponent();
         Market = market;
@@ -31,15 +31,17 @@ public partial class MarketCard : UserControl
         LayoutTransform = new ScaleTransform(textScale, textScale);
         if (!TrendHistory.IsSupportedSpan(trendMinutes)) throw new ArgumentOutOfRangeException(nameof(trendMinutes));
         TrendMinutes = trendMinutes;
-        TrendSelector.ItemsSource = new[] { new TrendOption(2, "2 分钟"), new TrendOption(5, "5 分钟"), new TrendOption(15, "15 分钟"), new TrendOption(60, "1 小时") };
-        TrendSelector.SelectedIndex = Array.IndexOf(new[] { 2, 5, 15, 60 }, trendMinutes);
+        var trendOptions = new[] { new TrendOption(2, "2 分钟"), new TrendOption(5, "5 分钟"), new TrendOption(15, "15 分钟"), new TrendOption(60, "1 小时"), new TrendOption(240, "4 小时"), new TrendOption(1440, "1 天"), new TrendOption(10080, "1 周") };
+        TrendSelector.ItemsSource = trendOptions;
+        TrendSelector.SelectedIndex = Array.FindIndex(trendOptions, option => option.Minutes == trendMinutes);
         SymbolText.Text = $"{market.BaseAsset} / {market.QuoteAsset}";
         HighLabel.Text = $"24H 最高 · {market.QuoteAsset}";
         LowLabel.Text = $"24H 最低 · {market.QuoteAsset}";
         KindText.Text = market.MarketLabel;
         CompactSymbol.Text = market.Label;
-        Height = WidgetLayout.MarketHeight(style, numberScale) - 8;
-        if (market.Kind != MarketKind.Spot)
+        Height = WidgetLayout.MarketHeight(style, numberScale, heightAdjustment) - 8;
+        var verticalSpacing = heightAdjustment / 6;
+        if (market.IsPerpetual)
         {
             Height += WidgetLayout.FundingHeight(style);
             CompactFunding.Visibility = FundingText.Visibility = Visibility.Visible;
@@ -51,16 +53,25 @@ public partial class MarketCard : UserControl
         if (style == CardStyle.Small)
         {
             if (smallCornerRadius is { } radius) CardRoot.CornerRadius = new CornerRadius(radius);
-            CardRoot.Padding = new Thickness(10, 6, 10, 6);
+            CardRoot.Padding = new Thickness(10, Math.Max(3, 6 + heightAdjustment / 8), 10, Math.Max(3, 6 + heightAdjustment / 8));
             CompactPanel.Visibility = Visibility.Visible;
             FullPanel.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            CardRoot.Padding = new Thickness(16, Math.Max(8, 12 + verticalSpacing / 2), 16, Math.Max(8, 12 + verticalSpacing / 2));
+            PriceBox.Margin = new Thickness(0, Math.Max(1, 4 + verticalSpacing / 2), 0, Math.Max(0, 2 + verticalSpacing / 3));
+            TrendPanel.Margin = new Thickness(TrendPanel.Margin.Left, Math.Max(2, 6 + verticalSpacing), 0, 0);
+            DetailsPanel.Margin = new Thickness(0, Math.Max(3, 8 + verticalSpacing), 0, Math.Max(1, 4 + verticalSpacing / 2));
+            FundingText.Margin = new Thickness(0, Math.Max(2, 5 + verticalSpacing / 2), 0, Math.Max(1, 2 + verticalSpacing / 3));
+            StatusPanel.Margin = new Thickness(0, Math.Max(2, 5 + verticalSpacing / 2), 0, 0);
         }
         DetailsPanel.Visibility = style == CardStyle.Large ? Visibility.Visible : Visibility.Collapsed;
         if (style == CardStyle.Medium)
         {
             TrendColumn.Width = new GridLength(104);
             Grid.SetRow(TrendPanel, 0); Grid.SetColumn(TrendPanel, 1);
-            TrendPanel.Margin = new Thickness(12, 4, 0, 0);
+            TrendPanel.Margin = new Thickness(12, Math.Max(1, 4 + verticalSpacing / 2), 0, 0);
             TrendTitle.Visibility = Visibility.Collapsed;
             PriceText.FontSize = 32;
         }
@@ -96,7 +107,7 @@ public partial class MarketCard : UserControl
         StatusDot.Fill = healthy ? Up : Amber;
         StatusText.Text = state;
         var fundingTip = "";
-        if (Market.Kind != MarketKind.Spot)
+        if (Market.IsPerpetual)
         {
             if (funding is not null && funding.Key != Market.Key) throw new InvalidOperationException("资金费率与卡片交易对不匹配。");
             var now = DateTimeOffset.UtcNow;
@@ -115,10 +126,10 @@ public partial class MarketCard : UserControl
             UpdateCompactChartVisibility();
         }
         // Compact health and detailed provenance remain accessible on hover.
-        ToolTip = $"{Market.Label} · Binance · 最新成交价（{Market.QuoteAsset}）\n{state} · {status.Detail}"
+        ToolTip = $"{Market.Label} · {ticker?.Source ?? (Market.Kind == MarketKind.UsStock ? "美股行情" : "Binance")} · 最新成交价（{Market.QuoteAsset}）\n{state} · {status.Detail}"
             + (ticker is null ? "" : $"\n行情时间：{ticker.ObservedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n24H：{ticker.ChangePercent:+0.00;-0.00;0.00}%")
             + fundingTip
-            + $"\n价格颜色：24H 涨绿跌红，持平中性\n趋势：最近 {TrendMinutes} 分钟 · 本次运行采样\n按住拖动；右键打开设置";
+            + $"\n价格颜色：24H 涨绿跌红，持平中性\n趋势：最近 {FormatTrendSpan(TrendMinutes)} · 本次运行采样\n按住拖动；右键打开设置";
     }
     private void DrawChart()
     {
@@ -152,7 +163,7 @@ public partial class MarketCard : UserControl
         double TextWidth(TextBlock text) => new FormattedText(text.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch), text.FontSize, Neutral,
             VisualTreeHelper.GetDpi(this).PixelsPerDip).WidthIncludingTrailingWhitespace;
-        var symbolWidth = Math.Max(TextWidth(CompactSymbol), Market.Kind == MarketKind.Spot ? 0 : TextWidth(CompactFunding));
+        var symbolWidth = Math.Max(TextWidth(CompactSymbol), Market.IsPerpetual ? TextWidth(CompactFunding) : 0);
         var visible = _showTrends && CompactPanel.ActualWidth >= symbolWidth + TextWidth(CompactPrice) + 80;
         var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         if (SmallChart.Visibility == visibility) return;
@@ -170,4 +181,11 @@ public partial class MarketCard : UserControl
         TrendSpanChanged?.Invoke(this, EventArgs.Empty);
         DrawChart();
     }
+    private static string FormatTrendSpan(int minutes) => minutes switch
+    {
+        10080 => "1 周",
+        1440 => "1 天",
+        int value when value % 60 == 0 => $"{value / 60} 小时",
+        _ => $"{minutes} 分钟"
+    };
 }

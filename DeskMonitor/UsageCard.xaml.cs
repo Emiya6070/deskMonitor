@@ -25,6 +25,7 @@ public partial class UsageCard : UserControl
         Root.Padding = compact ? new Thickness(10, 6, 10, 6) : new Thickness(16, 10, 16, 10);
         foreach (var element in new UIElement[] { PrimaryBar, SecondaryBar, PrimaryReset, SecondaryReset, RefreshButton })
             element.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        TokenBreakdown.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         DetailsText.Visibility = style == CardStyle.Large ? Visibility.Visible : Visibility.Collapsed;
         PrimaryValue.FontSize = SecondaryValue.FontSize = (compact ? 15 : 18) * numberScale;
         PrimaryValue.FontFamily = SecondaryValue.FontFamily = new FontFamily(monospace ? "Consolas" : "Segoe UI");
@@ -47,6 +48,7 @@ public partial class UsageCard : UserControl
         SetWindow(second, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, "长周期", now, stale);
         PrimaryRow.Visibility = first is null ? Visibility.Collapsed : Visibility.Visible;
         SecondaryRow.Visibility = second is null ? Visibility.Collapsed : Visibility.Visible;
+        SetTokenReport(usage?.TokenReport);
         StatusText.Text = busy ? "正在更新…"
             : error is not null ? usage is null ? "读取失败，将自动重试" : $"更新失败 · 上次 {usage.FetchedAt.ToLocalTime():HH:mm:ss}"
             : usage is null ? "等待读取额度" : stale ? "数据已过期" : $"更新于 {usage.FetchedAt.ToLocalTime():HH:mm:ss}";
@@ -55,10 +57,26 @@ public partial class UsageCard : UserControl
         ToolTip = "Codex 账户共享额度（剩余百分比）"
             + (first is null ? "" : $"\n{PrimaryLabel.Text}：{PrimaryValue.Text} · {PrimaryReset.Text}")
             + (second is null ? "" : $"\n{SecondaryLabel.Text}：{SecondaryValue.Text} · {SecondaryReset.Text}")
+            + (usage?.TokenReport is null ? "" : $"\n{TokenRangeLabel.Text}：{TokenTotal.Text} · {TokenCost.Text}\n{TokenBreakdown.Text}")
             + $"\n{StatusText.Text}"
             + (error is null ? "" : $"\n{error}\n将按每分钟周期自动重试。" + (usage is null ? "" : "当前显示上次成功结果。"))
             + "\n右键可刷新用量或打开设置";
     }
+    private void SetTokenReport(CodexTokenReport? report)
+    {
+        TokenRow.Visibility = report is null ? Visibility.Collapsed : Visibility.Visible;
+        if (report is null) return;
+        TokenRangeLabel.Text = report.RangeLabel;
+        TokenTotal.Text = $"{FormatTokens(report.Tokens.TotalTokens)} token";
+        TokenCost.Text = $"估算 ${report.EstimatedCostUsd:0.0000}" + (report.UnpricedTokens > 0 ? " + 未计价" : "");
+        TokenBreakdown.Text = $"输入 {FormatTokens(report.Tokens.InputTokens)} · 缓存 {FormatTokens(report.Tokens.CachedInputTokens)} · 输出 {FormatTokens(report.Tokens.OutputTokens)}";
+    }
+    private static string FormatTokens(long value) => value switch
+    {
+        >= 1_000_000 => $"{value / 1_000_000d:0.##}M",
+        >= 1_000 => $"{value / 1_000d:0.##}K",
+        _ => value.ToString("N0")
+    };
     private static void SetWindow(QuotaWindow? window, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, string fallback, DateTimeOffset now, bool stale)
     {
         label.Text = window?.Label ?? fallback;
@@ -67,6 +85,10 @@ public partial class UsageCard : UserControl
         value.Opacity = stale || waiting ? 0.5 : 1;
         bar.Value = window?.RemainingPercent ?? 0;
         bar.Opacity = stale || waiting ? 0.35 : 1;
+        var low = window is not null && !waiting && window.RemainingPercent <= 20;
+        value.SetResourceReference(TextBlock.ForegroundProperty, low ? "DownBrush" : "TextBrush");
+        bar.SetResourceReference(Control.ForegroundProperty, low ? "DownBrush" : "UsageAccent");
+        reset.FontWeight = window?.ResetsAt is not null ? FontWeights.Bold : FontWeights.Normal;
         if (window?.ResetsAt is not { } at) { reset.Text = window is null ? "未提供该窗口" : "未提供重置时间"; return; }
         var left = at - now;
         var duration = left.TotalDays >= 1 ? $"{(int)left.TotalDays}天 {left.Hours}小时" : left.TotalHours >= 1 ? $"{(int)left.TotalHours}小时 {left.Minutes}分钟" : $"{Math.Max(1, (int)Math.Ceiling(left.TotalMinutes))}分钟";

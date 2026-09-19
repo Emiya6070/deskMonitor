@@ -65,6 +65,14 @@ Check(WidgetLayout.Snap(new(-1913, 8, -1633, 128), area, 12) == new PixelRect(-1
 Check(WidgetLayout.Snap(new(-288, 912, -8, 1032), area, 12) == new PixelRect(-280, 920, 0, 1040), "snap right/bottom preserves card size");
 var far = new PixelRect(-1500, 200, -1220, 320);
 Check(WidgetLayout.Snap(far, area, 12) == far, "outside threshold leaves window unchanged");
+Check(WidgetLayout.UseSavedSize(false, true, false) && WidgetLayout.UseSavedSize(false, false, true)
+    && !WidgetLayout.UseSavedSize(true, false, true), "saved size is used while resizing or after custom size is locked");
+Check(WidgetLayout.ShouldAutoFit(false, false) && !WidgetLayout.ShouldAutoFit(false, true)
+    && !WidgetLayout.ShouldAutoFit(true, false), "auto-fit stops for resizable and locked custom windows");
+Check(!WidgetLayout.ShouldResetSize(true, true, false), "disabling resize preserves the current size even when layout settings changed");
+Check(!WidgetLayout.ShouldResetSize(true, false, false, true), "explicit size lock survives subsequent layout changes");
+Check(WidgetLayout.ShouldResetSize(true, false, false) && !WidgetLayout.ShouldResetSize(false, false, false),
+    "ordinary layout changes still reset automatic window size");
 Check(WidgetLayout.Preset(CardStyle.Small, 2).Height == 120 && WidgetLayout.Preset(CardStyle.Large, 2).Height > WidgetLayout.Preset(CardStyle.Medium, 2).Height, "preset heights accommodate multiple cards");
 CodexUsage ParseUsage(string json) { using var doc = JsonDocument.Parse(json); return CodexUsage.Parse(doc.RootElement, now); }
 var quotaJson = """{"rateLimits":{"primary":{"usedPercent":99}},"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":2000000000},"secondary":{"usedPercent":42,"windowDurationMins":10080,"resetsAt":2000100000}},"other":{"primary":{"usedPercent":90}}}}""";
@@ -76,6 +84,7 @@ Check(quota.Primary.AwaitingReset(DateTimeOffset.FromUnixTimeSeconds(2000000001)
 var partial = ParseUsage("""{"rateLimits":{"primary":null,"secondary":{"usedPercent":101,"windowDurationMins":null,"resetsAt":null}}}""");
 Check(partial.Primary is null && partial.Secondary!.RemainingPercent == 0 && partial.Secondary.ResetsAt is null, "missing windows stay unknown and overuse clamps remaining");
 await CodexUsageProcessChecks.RunAsync(Check);
+await CodexTokenAnalysisChecks.RunAsync(Check);
 Check(ParseUsage("""{"rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":15}}}""").Primary!.Label == "15 分钟", "quota labels are not hardcoded to five hours");
 foreach (var invalid in new[] { "{}", "[]", """{"rateLimitsByLimitId":{"other":{}},"rateLimits":{"primary":{"usedPercent":1}}}""", """{"rateLimits":{"primary":{"usedPercent":null}}}""", """{"rateLimits":{"primary":{"usedPercent":-1}}}""", """{"rateLimits":{"primary":{"usedPercent":4,"resetsAt":2000000000000}}}""", """{"rateLimits":{"primary":{"usedPercent":4,"windowDurationMins":"300"}}}""" })
 {
@@ -112,27 +121,39 @@ Check(exact.Move(70, 150, atEdge, dragArea, 12, 24).Left == 0, "exact edge arriv
 var crossed = new SnapDrag(new(0, 100, 280, 220), 50, 150, dragArea);
 Check(crossed.Move(20, 150, new(-30, 100, 250, 220), new(-1000, 0, 0, 800), 12, 24).Left == -30, "changing work area clears previous edge lock");
 var trend = new TrendHistory();
-for (var seconds = -7200; seconds <= 0; seconds++)
+for (var seconds = -8 * 24 * 60 * 60; seconds <= 0; seconds += 5)
 {
     var observed = now.AddSeconds(seconds);
     trend.Add(ticker with { ObservedAt = observed, FetchedAt = observed }, observed);
 }
-Check(trend.Window(now, 60).Length == 721, "trend retains only one hour with five-second spacing");
+Check(trend.Window(now, 10080).Length == 120961, "trend retains one week with five-second spacing");
 Check(trend.Window(now, 2).Length == 25 && trend.Window(now, 5).Length == 61 && trend.Window(now, 15).Length == 181, "trend selectors use independent trailing time windows");
+Check(trend.Window(now, 240).Length == 2881 && trend.Window(now, 1440).Length == 17281, "trend supports four-hour and one-day windows");
 trend.Add(ticker with { ObservedAt = now, FetchedAt = now }, now);
 trend.Add(ticker with { ObservedAt = now.AddSeconds(-20), FetchedAt = now }, now);
-Check(trend.Window(now, 60).Length == 721, "duplicate and stale observations do not add chart samples");
-Check(trend.Window(now.AddMinutes(61), 60).Length == 0, "chart clears when all observations age out");
+Check(trend.Window(now, 10080).Length == 120961, "duplicate and stale observations do not add chart samples");
+Check(trend.Window(now.AddDays(7).AddMinutes(1), 10080).Length == 0, "chart clears when all observations age out");
 var gaps = new TrendHistory();
 gaps.Add(ticker with { ObservedAt = now.AddSeconds(-60), FetchedAt = now.AddSeconds(-60) }, now.AddSeconds(-60));
 gaps.Add(ticker with { ObservedAt = now, FetchedAt = now }, now);
 Check(gaps.Window(now, 2).Length == 2 && gaps.Window(now, 2)[1].ObservedAt - gaps.Window(now, 2)[0].ObservedAt == TimeSpan.FromSeconds(60), "trend preserves real gaps without filling observations");
-var spans = settings with { TrendMinutes = new() { [settings.Markets![0].Key] = 5, [settings.Markets[1].Key] = 60 } };
+var spans = settings with { TrendMinutes = new() { [settings.Markets![0].Key] = 240, [settings.Markets[1].Key] = 10080 } };
 var restoredSpans = Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(spans))!);
-Check(restoredSpans.TrendMinutes[settings.Markets[0].Key] == 5 && restoredSpans.TrendMinutes[settings.Markets[1].Key] == 60 && migrated.TrendMinutes.Count == 0, "per-market trend spans persist independently and old preferences default to two minutes");
+Check(restoredSpans.TrendMinutes[settings.Markets[0].Key] == 240 && restoredSpans.TrendMinutes[settings.Markets[1].Key] == 10080 && migrated.TrendMinutes.Count == 0, "per-market trend spans persist independently and old preferences default to two minutes");
 var invalidSpanRejected = false;
 try { Preferences.Normalize(settings with { TrendMinutes = new() { [settings.Markets[0].Key] = 0 } }); } catch (InvalidDataException) { invalidSpanRejected = true; }
 Check(invalidSpanRejected, "unsupported trend spans are rejected");
+var stockJson = """{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL","regularMarketTime":1770000000,"regularMarketPrice":201.25,"chartPreviousClose":200,"regularMarketDayHigh":203,"regularMarketDayLow":198}}],"error":null}}""";
+var stock = UsStockParser.Parse(stockJson, "AAPL", DateTimeOffset.FromUnixTimeSeconds(1770000001));
+Check(stock.Kind == MarketKind.UsStock && stock.Key == "UsStock:AAPL" && stock.ChangePercent == 0.625m && stock.Source == "Yahoo Finance", "US stock quote parses with USD identity and daily return");
+var alpacaStock = UsStockFeed.ParseAlpacaSnapshot("""{"latestTrade":{"p":202.5},"dailyBar":{"h":204,"l":199},"prevDailyBar":{"c":200}}""", new("AAPL", "AAPL", "USD", MarketKind.UsStock), AlpacaFeed.Iex, now);
+Check(alpacaStock.Last == 202.5m && alpacaStock.ChangePercent == 1.25m && alpacaStock.Source == "Alpaca IEX 实时", "Alpaca snapshot parses and identifies its feed");
+Check(HttpMessageParser.Parse("""{"data":{"items":[{"title":"Hello"}]}}""", "data.items.0.title") == "Hello", "custom HTTP message extracts nested JSON and array paths");
+Check(HttpMessageParser.Parse("  plain text  ", "") == "plain text", "custom HTTP message accepts plain text");
+var messageSource = new HttpMessageSource { Id = "news", Title = "消息", Url = "https://example.com/api", JsonPath = "data.message", RefreshSeconds = 30 };
+messageSource.Validate();
+var sourceSettings = Preferences.Normalize(settings with { HttpSources = [messageSource], CardOrder = [messageSource.Key, .. settings.CardOrder] });
+Check(sourceSettings.HttpSources.Single().RefreshSeconds == 30 && sourceSettings.CardOrder[0] == messageSource.Key, "custom HTTP sources and card order persist");
 var appearance = settings with { Skin = Skin.Glacier, TextScale = 1.3, NumberScale = 1.2, MonospaceNumbers = true, ShowTrends = false, RefreshSeconds = 5 };
 var restoredAppearance = Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(appearance))!);
 Check(restoredAppearance.Skin == Skin.Glacier && restoredAppearance.TextScale == 1.3 && restoredAppearance.NumberScale == 1.2 && restoredAppearance.MonospaceNumbers && !restoredAppearance.ShowTrends && restoredAppearance.RefreshSeconds == 5, "appearance and refresh preferences persist");
@@ -144,6 +165,23 @@ foreach (var invalid in new[] { appearance with { Skin = (Skin)99 }, appearance 
 }
 var bigger = WidgetLayout.Preset(CardStyle.Medium, 3, true, 1.3, 1.3);
 Check(bigger.Width == 468 && bigger.Height > WidgetLayout.Preset(CardStyle.Medium, 3, true).Height, "larger text reserves actual layout space");
+Check(WidgetLayout.MarketHeight(CardStyle.Small, heightAdjustment: -12) == 42
+    && WidgetLayout.MarketHeight(CardStyle.Large, heightAdjustment: 48) == 314, "market height adjustment supports compact and spacious bounds");
+Check(WidgetLayout.Preset(CardStyle.Medium, 3, marketHeightAdjustment: 20, marketCount: 1).Height
+    - WidgetLayout.Preset(CardStyle.Medium, 3).Height == 20, "preset height applies market spacing only to market cards");
+var marketHeight = Preferences.Normalize(settings with { MarketHeightAdjustment = -8 });
+Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(marketHeight))!).MarketHeightAdjustment == -8,
+    "market height adjustment persists");
+foreach (var invalidHeight in new[] { -13d, 49d, double.NaN })
+{
+    var rejected = false; try { Preferences.Normalize(settings with { MarketHeightAdjustment = invalidHeight }); } catch (InvalidDataException) { rejected = true; }
+    Check(rejected, "invalid market height adjustment rejected");
+}
+var lockedWindow = Preferences.Normalize(settings with { Width = 512, Height = 420, AllowResize = false, LockCustomSize = true });
+Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(lockedWindow))!).LockCustomSize,
+    "locked custom window size persists");
+Check(!Preferences.Normalize(settings with { Width = null, Height = null, LockCustomSize = true }).LockCustomSize,
+    "custom size lock clears when dimensions are absent");
 Check(WidgetLayout.CornersAtWorkArea(new(0,0,280,120),dragArea)==DockedCorners.TopLeft,"only top-left corner squares at top-left work-area corner");
 Check(WidgetLayout.CornersAtWorkArea(new(720,0,1000,120),dragArea)==DockedCorners.TopRight,"top-right attachment squares top-right corner");
 Check(WidgetLayout.CornersAtWorkArea(new(720,680,1000,800),dragArea)==DockedCorners.BottomRight,"bottom-right attachment squares bottom-right corner");
@@ -189,6 +227,8 @@ foreach(var radius in new[]{-1d,25d,double.NaN}) {var rejected=false;try{Prefere
 Check(migrated.UsageExtraHeight == 0, "existing usage cards default to automatic compact height");
 var usageSize = Preferences.Normalize(settings with { UsageExtraHeight = 48 });
 Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(usageSize))!).UsageExtraHeight == 48, "usage height persists");
+var usageRange = Preferences.Normalize(settings with { CodexTokenRange = CodexTokenRangeKind.Last7Days });
+Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(usageRange))!).CodexTokenRange == CodexTokenRangeKind.Last7Days, "Codex token range persists");
 foreach (var height in new[] { -1d, 121d, double.NaN })
 {
     var rejected = false;
@@ -227,6 +267,10 @@ Check(tradFiMarkets.Single().TradFi && tradFiMarkets.Single().MarketLabel == "Tr
 var tradFiPreferences = Preferences.Normalize(settings with { Markets = [tradFiMarkets.Single()] });
 Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(tradFiPreferences))!).Markets!.Single().TradFi, "TradFi identity persists through settings");
 Check(WidgetLayout.Preset(CardStyle.Medium, 2, contractCount: 1).Height - WidgetLayout.Preset(CardStyle.Medium, 2).Height == 24 && WidgetLayout.Preset(CardStyle.Small, 2, contractCount: 2).Height == WidgetLayout.Preset(CardStyle.Small, 2).Height, "funding reserves full-card space while compact height stays unchanged");
+await ProviderUsageChecks.RunAsync(Check);
+var onlyProvider = Preferences.Normalize(new Preferences { Markets = [], ProviderUsages = [new() { Provider = UsageProvider.Claude, Kind = UsageAccountKind.Subscription, Enabled = true }], DateProgress = new() { Enabled = true, Period = DateProgressPeriod.Month } });
+var roundTripProvider = Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(onlyProvider))!);
+Check(roundTripProvider.ProviderUsages.Single().Enabled && roundTripProvider.DateProgress.Period == DateProgressPeriod.Month && roundTripProvider.CardOrder.Contains("usage:Claude:Subscription"), "provider-only settings and date progress persist and join card ordering");
 Console.WriteLine($"{passed} deterministic checks passed.");
 
 if(args.Contains("--live-usdc")) {

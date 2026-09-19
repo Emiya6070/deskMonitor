@@ -17,6 +17,7 @@ public sealed record QuotaWindow(double UsedPercent, int? DurationMinutes, DateT
 
 public sealed record CodexUsage(QuotaWindow? Primary, QuotaWindow? Secondary, DateTimeOffset FetchedAt)
 {
+    public CodexTokenReport? TokenReport { get; init; }
     public bool IsStale(DateTimeOffset now) => now - FetchedAt > TimeSpan.FromMinutes(2);
     public static CodexUsage Parse(JsonElement result, DateTimeOffset fetchedAt)
     {
@@ -85,6 +86,12 @@ public static class CodexUsageClient
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             return await ReadOnceAsync(configuredPath, cancellationToken);
         }
+    }
+    public static async Task<CodexUsage> ReadAsync(string? configuredPath, CodexTokenRangeKind range, CancellationToken cancellationToken)
+    {
+        var usage = await ReadAsync(configuredPath, cancellationToken);
+        var report = await CodexTokenAnalyzer.ReadAsync(range, usage.Primary, usage.Secondary, cancellationToken);
+        return usage with { TokenReport = report };
     }
     private static async Task<CodexUsage> ReadOnceAsync(string? configuredPath, CancellationToken cancellationToken)
     {

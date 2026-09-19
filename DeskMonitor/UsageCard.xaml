@@ -11,7 +11,13 @@
     </StackPanel><StackPanel x:Name="SecondaryRow"><Grid><TextBlock x:Name="SecondaryLabel" Text="长周期" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center"/><TextBlock x:Name="SecondaryValue" Text="—" FontWeight="SemiBold" FontSize="18" HorizontalAlignment="Right"/></Grid>
     <ProgressBar x:Name="SecondaryBar" Height="3" Minimum="0" Maximum="100" BorderThickness="0" Foreground="{DynamicResource UsageAccent}" Background="{DynamicResource BorderBrush}" Margin="0,4,0,3"/>
     <TextBlock x:Name="SecondaryReset" FontSize="10" Foreground="{DynamicResource Muted}"/>
-    </StackPanel></StackPanel>
+    </StackPanel>
+    <Border x:Name="TokenRow" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel><TextBlock x:Name="TokenRangeLabel" Text="Token 分析" Foreground="{DynamicResource Muted}" FontSize="11"/><TextBlock x:Name="TokenBreakdown" Text="输入 — · 缓存 — · 输出 —" Foreground="{DynamicResource Muted}" FontSize="10" Margin="0,3,8,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+      <StackPanel Grid.Column="1" HorizontalAlignment="Right"><TextBlock x:Name="TokenTotal" Text="— token" FontWeight="SemiBold" FontSize="14" HorizontalAlignment="Right"/><TextBlock x:Name="TokenCost" Text="约 $—" Foreground="{DynamicResource UsageAccent}" FontSize="11" HorizontalAlignment="Right" Margin="0,3,0,0"/></StackPanel>
+     </Grid>
+    </Border></StackPanel>
    <StackPanel Grid.Row="2" Margin="0,7,0,0"><TextBlock x:Name="StatusText" Text="正在读取额度…" FontSize="10" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="DetailsText" Text="账户共享额度 · 每分钟更新" FontSize="10" Foreground="{DynamicResource Muted}" Margin="0,5,0,0"/></StackPanel>
   </Grid>
  </Border>

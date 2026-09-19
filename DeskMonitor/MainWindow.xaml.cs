@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
@@ -23,10 +24,16 @@ namespace DeskMonitor;
 public partial class MainWindow : Window
 {
     private BinanceFeed _feed = new();
+    private UsStockFeed _stockFeed = new(new NetworkProxy(), UsStockProvider.Alpaca, AlpacaFeed.Iex, "", "");
+    private HttpClient _http = CreateHttpClient(new NetworkProxy());
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly object _gate = new();
     private readonly Dictionary<string, Ticker> _latest = new();
     private readonly Dictionary<MarketKind, FeedStatus> _statuses = new();
+    private readonly Dictionary<string, FeedStatus> _stockStatuses = new();
+    private readonly Dictionary<string, DateTimeOffset> _nextHttpRead = new();
+    private readonly Dictionary<string, Task> _httpTasks = new();
+    private readonly Dictionary<string, (string? Message, string? Error, DateTimeOffset? Updated)> _messages = new();
     private readonly Dictionary<string, TrendHistory> _history = new();
     private readonly Dictionary<MarketKind, IReadOnlyList<MarketSymbol>> _catalogs = new();
     private readonly Forms.NotifyIcon _tray;
@@ -48,10 +55,23 @@ public partial class MainWindow : Window
     private SnapDrag? _snapDrag;
     private DockedCorners _dockedCorners;
     private bool _updatingCorners;
+    private readonly Action<Preferences> _savePreferences;
 
-    public MainWindow()
+    public MainWindow() : this(preferences => preferences.Save()) { }
+    internal MainWindow(Action<Preferences> savePreferences)
     {
+        _savePreferences = savePreferences;
         InitializeComponent();
+        CardsPanel.SizeChanged += (_, _) =>
+        {
+            if (WidgetLayout.ShouldAutoFit(_preferences.AllowResize, _preferences.LockCustomSize) && !_closing)
+                Dispatcher.BeginInvoke(new Action(FitUsageHeight), DispatcherPriority.Background);
+        };
+        DateProgressHost.SizeChanged += (_, _) =>
+        {
+            if (WidgetLayout.ShouldAutoFit(_preferences.AllowResize, _preferences.LockCustomSize) && !_closing)
+                Dispatcher.BeginInvoke(new Action(FitUsageHeight), DispatcherPriority.Background);
+        };
         LocationChanged += (_, _) => UpdateDockedCorners();
         SizeChanged += (_, _) => UpdateDockedCorners();
         _timer.Tick += (_, _) => RenderLatest();
@@ -87,6 +107,8 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         { MessageBox.Show(this, $"无法读取设置，将使用默认设置。\n{ex.Message}", "DeskMonitor", MessageBoxButton.OK, MessageBoxImage.Warning); }
         _feed.Dispose(); _feed = new BinanceFeed(_preferences.Proxy);
+        _stockFeed.Dispose(); _stockFeed = new(_preferences.Proxy, _preferences.UsStockProvider, _preferences.AlpacaFeed, _preferences.AlpacaKeyId, _preferences.AlpacaSecretKey);
+        _http.Dispose(); _http = CreateHttpClient(_preferences.Proxy);
         var area = SystemParameters.WorkArea;
         Left = _preferences.Left ?? area.Right - Width - 28;
         Top = _preferences.Top ?? area.Top + 60;
@@ -102,19 +124,38 @@ public partial class MainWindow : Window
         _usageCard = null;
         foreach (var key in _preferences.CardOrder)
         {
+            var providerUsage = _preferences.ProviderUsages.FirstOrDefault(x => x.Key == key);
+            if (providerUsage is not null)
+            {
+                if (providerUsage.Enabled)
+                {
+                    var usageCard = new ProviderUsageCard(providerUsage, _preferences);
+                    usageCard.SizeChanged += (_, _) => { if (WidgetLayout.ShouldAutoFit(_preferences.AllowResize, _preferences.LockCustomSize)) FitUsageHeight(); };
+                    usageCard.Tag = key;
+                    CardsPanel.Children.Add(usageCard);
+                }
+                continue;
+            }
             if (key == Preferences.CodexCardKey)
             {
                 if (_preferences.ShowCodexUsage)
                 {
                     _usageCard = new UsageCard(_preferences.Style, _preferences.TextScale, _preferences.NumberScale, _preferences.MonospaceNumbers, _preferences.SmallCornerRadius, _preferences.UsageExtraHeight);
                     _usageCard.RefreshRequested += (_, _) => StartUsageRefresh(true);
-                    _usageCard.SizeChanged += (_, _) => { if (!_preferences.AllowResize) FitUsageHeight(); };
+                    _usageCard.SizeChanged += (_, _) => { if (WidgetLayout.ShouldAutoFit(_preferences.AllowResize, _preferences.LockCustomSize)) FitUsageHeight(); };
+                    _usageCard.Tag = key;
                     CardsPanel.Children.Add(_usageCard);
                 }
                 continue;
             }
+            var source = _preferences.HttpSources.FirstOrDefault(s => s.Key == key);
+            if (source is not null)
+            {
+                CardsPanel.Children.Add(new HttpMessageCard(source, _preferences.Style, _preferences.TextScale, _preferences.SmallCornerRadius) { Tag = key });
+                continue;
+            }
             var market = _preferences.Markets!.Single(m => m.Key == key);
-            var card = new MarketCard(market, _preferences.Style, _preferences.TrendMinutes.GetValueOrDefault(market.Key, 2), _preferences.TextScale, _preferences.NumberScale, _preferences.MonospaceNumbers, _preferences.ShowTrends, _preferences.SmallCornerRadius);
+            var card = new MarketCard(market, _preferences.Style, _preferences.TrendMinutes.GetValueOrDefault(market.Key, 2), _preferences.TextScale, _preferences.NumberScale, _preferences.MonospaceNumbers, _preferences.ShowTrends, _preferences.SmallCornerRadius, _preferences.MarketHeightAdjustment);
             card.TrendSpanChanged += (_, _) =>
             {
                 var spans = new Dictionary<string, int>(_preferences.TrendMinutes) { [market.Key] = card.TrendMinutes };
@@ -122,8 +163,10 @@ public partial class MainWindow : Window
                 SavePreferences();
                 RenderLatest();
             };
+            card.Tag = key;
             CardsPanel.Children.Add(card);
         }
+        CardGrouping.Apply(CardsPanel, _preferences.CardPlacements, _preferences.TextScale);
         foreach (var key in _history.Keys.Where(key => !_preferences.Markets!.Any(m => m.Key == key)).ToArray()) _history.Remove(key);
         RenderLatest();
     }
@@ -139,18 +182,31 @@ public partial class MainWindow : Window
         {
             foreach (var key in _latest.Keys.Where(key => !_preferences.Markets!.Any(m => m.Key == key)).ToArray()) _latest.Remove(key);
             foreach (var key in _funding.Keys.Where(key => !_preferences.Markets!.Any(m => m.Key == key)).ToArray()) _funding.Remove(key);
+            foreach (var key in _stockStatuses.Keys.Where(key => !_preferences.Markets!.Any(m => m.Key == key)).ToArray()) _stockStatuses.Remove(key);
             _statuses.Clear();
         }
-        _streamTask = _feed.RunAsync(_preferences.Markets!,
+        var cryptoTask = _feed.RunAsync(_preferences.Markets!.Where(m => m.Kind != MarketKind.UsStock).ToArray(),
             ticker => { lock (_gate) { if (_subscription == subscription) _latest[ticker.Key] = ticker; } },
             (kind, status) => { lock (_gate) { if (_subscription == subscription) _statuses[kind] = status; } }, subscription.Token,
             funding => { lock (_gate) { if (_subscription == subscription) _funding[funding.Key] = funding; } });
+        var stockTask = _stockFeed.RunAsync(_preferences.Markets!.Where(m => m.Kind == MarketKind.UsStock).ToArray(),
+            ticker => { lock (_gate) { if (_subscription == subscription) _latest[ticker.Key] = ticker; } },
+            (key, status) => { lock (_gate) { if (_subscription == subscription) _stockStatuses[key] = status; } }, subscription.Token);
+        _streamTask = Task.WhenAll(cryptoTask, stockTask);
     }
     private void RenderLatest()
     {
         if (_closing) return;
+        (DateProgressHost.Content as DateProgressColumn)?.Refresh();
         StartUsageRefresh(false);
+        RefreshProviderUsage();
+        StartHttpRefreshes();
         _usageCard?.Update(_usage, _usageError, !_usageTask.IsCompleted);
+        foreach (var card in CardsPanel.Children.OfType<HttpMessageCard>())
+        {
+            var state = _messages.GetValueOrDefault(card.Source.Key);
+            card.Update(state.Message, state.Error, state.Updated, _httpTasks.TryGetValue(card.Source.Key, out var task) && !task.IsCompleted);
+        }
         foreach (var card in CardsPanel.Children.OfType<MarketCard>())
         {
             Ticker? ticker;
@@ -160,12 +216,39 @@ public partial class MainWindow : Window
             {
                 _latest.TryGetValue(card.Market.Key, out ticker);
                 _funding.TryGetValue(card.Market.Key, out funding);
-                status = _statuses.GetValueOrDefault(card.Market.Kind) ?? new(FeedPhase.Connecting, "等待连接…");
+                status = card.Market.Kind == MarketKind.UsStock
+                    ? _stockStatuses.GetValueOrDefault(card.Market.Key) ?? new(FeedPhase.Connecting, "等待 HTTP 行情…")
+                    : _statuses.GetValueOrDefault(card.Market.Kind) ?? new(FeedPhase.Connecting, "等待连接…");
             }
             if (!_history.TryGetValue(card.Market.Key, out var history)) _history[card.Market.Key] = history = new();
             var now = DateTimeOffset.UtcNow;
             if (ticker is not null) history.Add(ticker, now);
             card.Update(ticker, status, card.NeedsTrendRefresh ? history.Window(now, card.TrendMinutes) : null, funding);
+        }
+    }
+    private void StartHttpRefreshes()
+    {
+        if (_closing || !_ready || !IsVisible || _subscription is null) return;
+        var now = DateTimeOffset.UtcNow;
+        foreach (var source in _preferences.HttpSources)
+            if (now >= _nextHttpRead.GetValueOrDefault(source.Key) && (!_httpTasks.TryGetValue(source.Key, out var task) || task.IsCompleted))
+            {
+                _nextHttpRead[source.Key] = now.AddSeconds(source.RefreshSeconds);
+                _httpTasks[source.Key] = ReadMessageAsync(source, _subscription.Token);
+            }
+    }
+    private async Task ReadMessageAsync(HttpMessageSource source, CancellationToken token)
+    {
+        try
+        {
+            var body = await _http.GetStringAsync(source.Url, token);
+            _messages[source.Key] = (HttpMessageParser.Parse(body, source.JsonPath), null, DateTimeOffset.UtcNow);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException)
+        {
+            var previous = _messages.GetValueOrDefault(source.Key);
+            _messages[source.Key] = (previous.Message, ex.Message, previous.Updated);
         }
     }
     private void StartUsageRefresh(bool force)
@@ -183,7 +266,8 @@ public partial class MainWindow : Window
         {
             var executable = _preferences.CodexExecutable;
             // Process startup and tree termination can block; keep them off the UI thread.
-            var usage = await Task.Run(() => CodexUsageClient.ReadAsync(executable, token), token);
+            var range = _preferences.CodexTokenRange;
+            var usage = await Task.Run(() => CodexUsageClient.ReadAsync(executable, range, token), token);
             if (!token.IsCancellationRequested) { _usage = usage; _usageError = null; }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { _nextUsageRead = DateTimeOffset.MinValue; }
@@ -200,6 +284,15 @@ public partial class MainWindow : Window
     private void ApplyLayout(bool resetSize)
     {
         ThemeManager.Apply(_preferences.Skin);
+        CardsPanel.Columns = _preferences.TwoColumnMode ? 2 : 1;
+        var dateBelow = _preferences.DateProgress.Placement == DateProgressPlacement.Bottom;
+        DateProgressHost.Visibility = _preferences.DateProgress.Enabled ? Visibility.Visible : Visibility.Collapsed;
+        DateProgressHost.Width = dateBelow ? double.NaN : 116 * _preferences.TextScale;
+        Grid.SetRow(DateProgressHost, dateBelow ? 1 : 0);
+        Grid.SetColumnSpan(DateProgressHost, dateBelow ? 2 : 1);
+        Grid.SetColumn(CardsScroll, dateBelow ? 0 : 1);
+        Grid.SetColumnSpan(CardsScroll, dateBelow ? 2 : 1);
+        DateProgressHost.Content = _preferences.DateProgress.Enabled ? new DateProgressColumn(_preferences.DateProgress, _preferences.TextScale) : null;
         _timer.Interval = TimeSpan.FromSeconds(_preferences.RefreshSeconds);
         var small = _preferences.Style == CardStyle.Small;
         Header.Visibility = small || _preferences.HideHeader ? Visibility.Collapsed : Visibility.Visible;
@@ -209,26 +302,60 @@ public partial class MainWindow : Window
         PinButton.ToolTip = Topmost ? "取消置顶" : "置顶显示";
         ResizeMode = _preferences.AllowResize ? ResizeMode.CanResize : ResizeMode.NoResize;
         WindowChrome.GetWindowChrome(this).ResizeBorderThickness = new Thickness(_preferences.AllowResize ? 6 : 0);
-        var preset = WidgetLayout.Preset(_preferences.Style, _preferences.Markets!.Length, _preferences.ShowCodexUsage, _preferences.TextScale, _preferences.NumberScale, _preferences.HideHeader, _preferences.Markets.Count(m => m.Kind != MarketKind.Spot));
+        var cardCount = _preferences.Markets!.Length + _preferences.HttpSources.Length + _preferences.ProviderUsages.Count(x => x.Enabled);
+        var preset = WidgetLayout.Preset(_preferences.Style, cardCount, _preferences.ShowCodexUsage, _preferences.TextScale, _preferences.NumberScale, _preferences.HideHeader, _preferences.Markets.Count(m => m.IsPerpetual), _preferences.MarketHeightAdjustment, _preferences.Markets.Length);
         var work = WindowPlacement.WorkSize(this);
         MinWidth = (small ? 220 : _preferences.Style == CardStyle.Medium ? 300 : 340) * _preferences.TextScale;
+        var dateWidth = _preferences.DateProgress.Enabled && !dateBelow ? 116 * _preferences.TextScale : 0;
+        MinWidth = MinWidth * CardsPanel.Columns + dateWidth;
+        var presetWidth = preset.Width * CardsPanel.Columns + dateWidth;
         MinHeight = (_preferences.Markets.Length == 0 ? (small ? 50 : _preferences.HideHeader ? 70 : 114) : small ? 66 : _preferences.HideHeader ? 120 : 180) * _preferences.TextScale;
+        if (_preferences.DateProgress.Enabled && !dateBelow)
+        {
+            var date = _preferences.DateProgress;
+            var rows = date.Period == DateProgressPeriod.Week ? 7 : date.Style == DateProgressStyle.Grid ? 11 : 31;
+            var labelHeight = date.Style == DateProgressStyle.Grid && date.ShowLabels ? 16 : 0;
+            var dateHeight = Math.Min(420, (date.ShowHeading ? 58 : 8) + rows * (date.DotSize + 6 + date.Spacing + labelHeight));
+            MinHeight = Math.Max(MinHeight, Math.Min(work.Height - 24, (dateHeight + (small || _preferences.HideHeader ? 12 : 66)) * _preferences.TextScale));
+        }
+        // A locked size was already accepted by the native resize interaction. Content
+        // wrapping at that width must not introduce a larger minimum on the next save.
+        if (_preferences.LockCustomSize && _preferences.Width is { } lockedWidth)
+            MinWidth = Math.Min(MinWidth, lockedWidth);
         MaxWidth = Math.Max(MinWidth, work.Width);
+        var useSavedSize = WidgetLayout.UseSavedSize(resetSize, _preferences.AllowResize, _preferences.LockCustomSize);
+        Width = Math.Clamp(useSavedSize ? _preferences.Width ?? presetWidth : presetWidth, MinWidth, MaxWidth);
+        var bottomHeight = MeasureBottomDate(Width - Frame.Padding.Left - Frame.Padding.Right);
+        MinHeight += bottomHeight;
+        if (_preferences.LockCustomSize && _preferences.Height is { } lockedHeight)
+            MinHeight = Math.Min(MinHeight, lockedHeight);
         MaxHeight = Math.Max(MinHeight, work.Height);
-        Width = Math.Clamp(!resetSize && _preferences.AllowResize ? _preferences.Width ?? preset.Width : preset.Width, MinWidth, MaxWidth);
-        Height = Math.Clamp(!resetSize && _preferences.AllowResize ? _preferences.Height ?? preset.Height : preset.Height, MinHeight, Math.Max(MinHeight, MaxHeight - 24));
+        var presetHeight = preset.Height + bottomHeight;
+        Height = Math.Clamp(useSavedSize ? _preferences.Height ?? presetHeight : presetHeight, MinHeight,
+            useSavedSize ? MaxHeight : Math.Max(MinHeight, MaxHeight - 24));
         WindowPlacement.EnsureVisible(this);
         UpdateDockedCorners();
     }
     private void FitUsageHeight()
     {
-        if (_usageCard is null || _closing) return;
-        // Use measured content rather than reserving two quota windows unconditionally.
-        var preset = WidgetLayout.Preset(_preferences.Style, _preferences.Markets!.Length, false, _preferences.TextScale, _preferences.NumberScale, _preferences.HideHeader, _preferences.Markets.Count(m => m.Kind != MarketKind.Spot));
-        var height = preset.Height + (_usageCard.ActualHeight + 8) * _preferences.TextScale;
+        if (_closing || CardsPanel.Children.Count == 0
+            || !WidgetLayout.ShouldAutoFit(_preferences.AllowResize, _preferences.LockCustomSize)) return;
+        var availableWidth = Math.Max(1, Width - Frame.Padding.Left - Frame.Padding.Right
+            - (_preferences.DateProgress.Enabled && _preferences.DateProgress.Placement == DateProgressPlacement.Left ? DateProgressHost.Width : 0));
+        if (CardsPanel.ActualWidth > 0) availableWidth = CardsPanel.ActualWidth;
+        CardsPanel.Measure(new Size(availableWidth, double.PositiveInfinity));
+        var height = CardsPanel.DesiredSize.Height + Frame.Padding.Top + Frame.Padding.Bottom
+            + (Header.Visibility == Visibility.Visible ? Header.Height + Header.Margin.Top + Header.Margin.Bottom : 0) + 2
+            + MeasureBottomDate(availableWidth);
         Height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, MaxHeight - 24));
         WindowPlacement.EnsureVisible(this);
         UpdateDockedCorners();
+    }
+    private double MeasureBottomDate(double width)
+    {
+        if (!_preferences.DateProgress.Enabled || _preferences.DateProgress.Placement != DateProgressPlacement.Bottom) return 0;
+        DateProgressHost.Measure(new Size(Math.Max(1, width), double.PositiveInfinity));
+        return DateProgressHost.DesiredSize.Height;
     }
     private void UpdateDockedCorners()
     {
@@ -261,7 +388,7 @@ public partial class MainWindow : Window
         _settingsOpen = true;
         try
         {
-            _settings = new SettingsWindow(_preferences, _catalogs, ApplySettingsAsync) { Owner = this, Topmost = Topmost };
+            _settings = new SettingsWindow(_preferences with { Width = ActualWidth, Height = ActualHeight }, _catalogs, ApplySettingsAsync) { Owner = this, Topmost = Topmost };
             _settings.ShowDialog();
         }
         finally { _settings = null; _settingsOpen = false; }
@@ -272,36 +399,70 @@ public partial class MainWindow : Window
         var oldUsageExtraHeight = _preferences.UsageExtraHeight;
         var oldStartup = StartupRegistration.IsEnabled();
         var marketsChanged = !_preferences.Markets!.Select(x => x.Key).Order().SequenceEqual(candidate.Markets!.Select(x => x.Key).Order());
-        var usageChanged = candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.CodexExecutable != _preferences.CodexExecutable;
+        var httpChanged = !_preferences.HttpSources.SequenceEqual(candidate.HttpSources);
+        var usageChanged = candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.CodexExecutable != _preferences.CodexExecutable
+            || candidate.CodexTokenRange != _preferences.CodexTokenRange;
         var proxyChanged = candidate.Proxy != _preferences.Proxy;
-        var reset = candidate.HideHeader != _preferences.HideHeader || candidate.Style != _preferences.Style || candidate.Markets!.Length != _preferences.Markets!.Length || candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.TextScale != _preferences.TextScale || candidate.NumberScale != _preferences.NumberScale || !candidate.AllowResize;
-        candidate = candidate with { Left = Left, Top = Top, Width = reset ? null : Width, Height = reset ? null : Height };
+        var stockSourceChanged = candidate.UsStockProvider != _preferences.UsStockProvider || candidate.AlpacaFeed != _preferences.AlpacaFeed
+            || candidate.AlpacaKeyId != _preferences.AlpacaKeyId || candidate.AlpacaSecretKey != _preferences.AlpacaSecretKey;
+        var layoutChanged = candidate.HideHeader != _preferences.HideHeader || candidate.Style != _preferences.Style || candidate.Markets!.Length != _preferences.Markets!.Length || candidate.HttpSources.Length != _preferences.HttpSources.Length || candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.TextScale != _preferences.TextScale || candidate.NumberScale != _preferences.NumberScale || candidate.MarketHeightAdjustment != _preferences.MarketHeightAdjustment;
+        layoutChanged |= candidate.TwoColumnMode != _preferences.TwoColumnMode || candidate.DateProgress.Enabled != _preferences.DateProgress.Enabled || candidate.ProviderUsages.Count(x => x.Enabled) != _preferences.ProviderUsages.Count(x => x.Enabled);
+        layoutChanged |= candidate.DateProgress.Placement != _preferences.DateProgress.Placement;
+        var lockingCurrentSize = candidate.LockCustomSize && !_preferences.LockCustomSize;
+        // ActualWidth/ActualHeight are the authoritative dimensions after a native edge resize.
+        // Capture them before changing ResizeMode, which rebuilds the non-client frame.
+        var lockedWidth = ActualWidth > 0 ? ActualWidth : Width;
+        var lockedHeight = ActualHeight > 0 ? ActualHeight : Height;
+        var resetSize = WidgetLayout.ShouldResetSize(layoutChanged, _preferences.AllowResize, candidate.AllowResize, candidate.LockCustomSize)
+            || (_preferences.LockCustomSize && !candidate.LockCustomSize && !candidate.AllowResize);
+        var lockCustomSize = !candidate.AllowResize && candidate.LockCustomSize;
+        candidate = candidate with { Left = Left, Top = Top, Width = resetSize ? null : lockedWidth, Height = resetSize ? null : lockedHeight,
+            LockCustomSize = lockCustomSize };
         if (startup != oldStartup) StartupRegistration.SetEnabled(startup);
-        try { candidate.Save(); }
+        try { _savePreferences(candidate); }
         catch { if (startup != oldStartup) StartupRegistration.SetEnabled(oldStartup); throw; }
+        await ResetProviderUsageAsync();
         if (usageChanged)
         {
             _usageRequest?.Cancel();
             await _usageTask;
             _usage = null; _usageError = null; _nextUsageRead = DateTimeOffset.MinValue;
         }
-        if (proxyChanged)
+        if (proxyChanged || stockSourceChanged)
         {
             _subscription?.Cancel(); await _streamTask;
-            _feed.Dispose(); _feed = new BinanceFeed(candidate.Proxy);
-            _catalogs.Clear();
+            if (proxyChanged)
+            {
+                _feed.Dispose(); _feed = new BinanceFeed(candidate.Proxy);
+                _http.Dispose(); _http = CreateHttpClient(candidate.Proxy);
+                _catalogs.Clear();
+            }
+            _stockFeed.Dispose(); _stockFeed = new(candidate.Proxy, candidate.UsStockProvider, candidate.AlpacaFeed, candidate.AlpacaKeyId, candidate.AlpacaSecretKey);
             lock (_gate) { _latest.Clear(); _funding.Clear(); }
             _history.Clear();
         }
         _preferences = candidate;
-        ApplyLayout(reset);
+        ApplyLayout(resetSize);
         BuildCards();
-        if (reset || candidate.UsageExtraHeight != oldUsageExtraHeight)
+        if (resetSize || layoutChanged || candidate.UsageExtraHeight != oldUsageExtraHeight)
         {
             UpdateLayout();
             FitUsageHeight();
         }
-        if (marketsChanged || proxyChanged) await RestartStreamsAsync();
+        if (lockingCurrentSize)
+        {
+            // ResizeMode and card reconstruction can finish their native/layout work after
+            // ApplyLayout returns. Restore the captured user size after that pass, then save it.
+            await Dispatcher.InvokeAsync(() =>
+            {
+                Width = Math.Clamp(lockedWidth, MinWidth, MaxWidth);
+                Height = Math.Clamp(lockedHeight, MinHeight, MaxHeight);
+                WindowPlacement.EnsureVisible(this);
+                UpdateDockedCorners();
+            }, DispatcherPriority.Loaded);
+            _preferences = _preferences with { Width = Width, Height = Height, LockCustomSize = true };
+        }
+        if (marketsChanged || httpChanged || proxyChanged || stockSourceChanged) await RestartStreamsAsync();
         SavePreferences();
     }
     private void TogglePin(object sender, RoutedEventArgs e)
@@ -349,7 +510,7 @@ public partial class MainWindow : Window
     {
         if (!_ready || _closing) return;
         _preferences = _preferences with { Left = Left, Top = Top, Width = Width, Height = Height };
-        try { _preferences.Save(); }
+        try { _savePreferences(_preferences); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         { MessageBox.Show(this, "设置保存失败：" + ex.Message, "DeskMonitor", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
@@ -360,6 +521,7 @@ public partial class MainWindow : Window
         if (_closing) return;
         SavePreferences();
         _closing = true;
+        _providerLifetime.Cancel();
         _settings?.Close();
         _timer.Stop();
         _hideRequest?.Cancel();
@@ -368,10 +530,12 @@ public partial class MainWindow : Window
         _subscription?.Cancel();
         _usageRequest?.Cancel();
         await Task.WhenAll(_usageTask, _streamTask, _hideTask);
+        await Task.WhenAll(_providerTasks.Values);
+        _providerLifetime.Dispose();
         _usageRequest?.Dispose();
         _usageRequest = null;
         _tray.ContextMenuStrip?.Dispose();
-        _tray.Dispose(); _trayIcon.Dispose(); _subscription?.Dispose(); _feed.Dispose();
+        _tray.Dispose(); _trayIcon.Dispose(); _subscription?.Dispose(); _feed.Dispose(); _stockFeed.Dispose(); _http.Dispose();
         _closeReady = true;
         // Tasks may already be complete; do not re-enter Close during Closing.
         _ = Dispatcher.BeginInvoke(new Action(Close));
@@ -418,4 +582,5 @@ public partial class MainWindow : Window
         try { return (System.Drawing.Icon)System.Drawing.Icon.FromHandle(handle).Clone(); }
         finally { DestroyIcon(handle); }
     }
+    private static HttpClient CreateHttpClient(NetworkProxy settings) => new(new SocketsHttpHandler { Proxy = settings.CreateProxy(), UseProxy = settings.Mode != ProxyMode.Direct }) { Timeout = TimeSpan.FromSeconds(15) };
 }

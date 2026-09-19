@@ -4,13 +4,16 @@ using System.Text.Json.Serialization;
 
 namespace DeskMonitor.Core;
 
-public enum MarketKind { Spot, UsdtPerpetual, UsdcPerpetual }
+public enum MarketKind { Spot, UsdtPerpetual, UsdcPerpetual, UsStock }
+public enum UsStockProvider { Alpaca, Yahoo }
+public enum AlpacaFeed { Iex, DelayedSip, Sip }
 public enum CardStyle { Small, Medium, Large }
 
 public sealed record MarketSymbol(string Symbol, string BaseAsset, string QuoteAsset, MarketKind Kind = MarketKind.Spot, bool TradFi = false)
 {
     [JsonIgnore] public string Key => $"{Kind}:{Symbol}";
-    [JsonIgnore] public string MarketLabel => Kind == MarketKind.Spot ? "现货" : TradFi ? "TradFi 永续" : "永续";
+    [JsonIgnore] public string MarketLabel => Kind == MarketKind.Spot ? "现货" : Kind == MarketKind.UsStock ? "美股" : TradFi ? "TradFi 永续" : "永续";
+    [JsonIgnore] public bool IsPerpetual => Kind is MarketKind.UsdtPerpetual or MarketKind.UsdcPerpetual;
     [JsonIgnore] public string Label => $"{BaseAsset} / {QuoteAsset} · {MarketLabel}";
 }
 
@@ -19,7 +22,8 @@ public sealed record Ticker(string Symbol, decimal Last, decimal Open24h, decima
     decimal Low24h, DateTimeOffset ObservedAt, DateTimeOffset FetchedAt, MarketKind Kind = MarketKind.Spot)
 {
     public string Key => $"{Kind}:{Symbol}";
-    public string Source => Kind switch { MarketKind.Spot => "Binance Spot", MarketKind.UsdtPerpetual => "Binance USDT Perpetual", MarketKind.UsdcPerpetual => "Binance USDC Perpetual", _ => throw new InvalidDataException("未知市场类型。") };
+    public string? SourceOverride { get; init; }
+    public string Source => SourceOverride ?? (Kind switch { MarketKind.Spot => "Binance Spot", MarketKind.UsdtPerpetual => "Binance USDT Perpetual", MarketKind.UsdcPerpetual => "Binance USDC Perpetual", MarketKind.UsStock => "Yahoo Finance", _ => throw new InvalidDataException("未知市场类型。") });
     // Derived simple return for the rolling 24-hour window, not the UTC calendar day.
     public decimal ChangePercent => (Last / Open24h - 1m) * 100m;
     public bool IsStale(DateTimeOffset now) =>
