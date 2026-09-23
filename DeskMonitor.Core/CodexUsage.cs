@@ -87,10 +87,12 @@ public static class CodexUsageClient
             return await ReadOnceAsync(configuredPath, cancellationToken);
         }
     }
-    public static async Task<CodexUsage> ReadAsync(string? configuredPath, CodexTokenRangeKind range, CancellationToken cancellationToken)
+    public static async Task<CodexUsage> ReadAsync(string? configuredPath, CodexTokenRangeKind range,
+        CancellationToken cancellationToken, IReadOnlyCollection<string>? excludedBillingModels = null)
     {
         var usage = await ReadAsync(configuredPath, cancellationToken);
-        var report = await CodexTokenAnalyzer.ReadAsync(range, usage.Primary, usage.Secondary, cancellationToken);
+        var report = await CodexTokenAnalyzer.ReadAsync(range, usage.Primary, usage.Secondary, cancellationToken,
+            excludedBillingModels: excludedBillingModels);
         return usage with { TokenReport = report };
     }
     private static async Task<CodexUsage> ReadOnceAsync(string? configuredPath, CancellationToken cancellationToken)

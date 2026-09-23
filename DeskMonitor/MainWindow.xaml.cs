@@ -267,7 +267,8 @@ public partial class MainWindow : Window
             var executable = _preferences.CodexExecutable;
             // Process startup and tree termination can block; keep them off the UI thread.
             var range = _preferences.CodexTokenRange;
-            var usage = await Task.Run(() => CodexUsageClient.ReadAsync(executable, range, token), token);
+            var excludedBillingModels = _preferences.CodexExcludedBillingModels;
+            var usage = await Task.Run(() => CodexUsageClient.ReadAsync(executable, range, token, excludedBillingModels), token);
             if (!token.IsCancellationRequested) { _usage = usage; _usageError = null; }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { _nextUsageRead = DateTimeOffset.MinValue; }
@@ -401,7 +402,9 @@ public partial class MainWindow : Window
         var marketsChanged = !_preferences.Markets!.Select(x => x.Key).Order().SequenceEqual(candidate.Markets!.Select(x => x.Key).Order());
         var httpChanged = !_preferences.HttpSources.SequenceEqual(candidate.HttpSources);
         var usageChanged = candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.CodexExecutable != _preferences.CodexExecutable
-            || candidate.CodexTokenRange != _preferences.CodexTokenRange;
+            || candidate.CodexTokenRange != _preferences.CodexTokenRange
+            || !candidate.CodexExcludedBillingModels.Order(StringComparer.OrdinalIgnoreCase)
+                .SequenceEqual(_preferences.CodexExcludedBillingModels.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
         var proxyChanged = candidate.Proxy != _preferences.Proxy;
         var stockSourceChanged = candidate.UsStockProvider != _preferences.UsStockProvider || candidate.AlpacaFeed != _preferences.AlpacaFeed
             || candidate.AlpacaKeyId != _preferences.AlpacaKeyId || candidate.AlpacaSecretKey != _preferences.AlpacaSecretKey;
@@ -464,6 +467,7 @@ public partial class MainWindow : Window
         }
         if (marketsChanged || httpChanged || proxyChanged || stockSourceChanged) await RestartStreamsAsync();
         SavePreferences();
+        if (usageChanged) StartUsageRefresh(true);
     }
     private void TogglePin(object sender, RoutedEventArgs e)
     {

@@ -37,6 +37,7 @@ public sealed record Preferences
     public DateProgressSettings DateProgress { get; init; } = new();
     public double UsageExtraHeight { get; init; }
     public CodexTokenRangeKind CodexTokenRange { get; init; } = CodexTokenRangeKind.ShortReset;
+    public string[] CodexExcludedBillingModels { get; init; } = [];
     public string? CodexExecutable { get; init; }
     public Dictionary<string, int> TrendMinutes { get; init; } = new();
     public HttpMessageSource[] HttpSources { get; init; } = [];
@@ -80,6 +81,9 @@ public sealed record Preferences
             || !double.IsFinite(result.MarketHeightAdjustment) || result.MarketHeightAdjustment is < -12 or > 48
             || !double.IsFinite(result.UsageExtraHeight) || result.UsageExtraHeight is < 0 or > 120
             || !Enum.IsDefined(result.CodexTokenRange)
+            || result.CodexExcludedBillingModels is null || result.CodexExcludedBillingModels.Length > 100
+            || result.CodexExcludedBillingModels.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 128 || x.Any(char.IsControl))
+            || result.CodexExcludedBillingModels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != result.CodexExcludedBillingModels.Length
             || result.RefreshSeconds is not (1 or 2 or 5)
             || (result.SmallCornerRadius is { } radius && (!double.IsFinite(radius) || radius is < 0 or > 24))
             || result.TrendMinutes is null || result.TrendMinutes.Any(x => !TrendHistory.IsSupportedSpan(x.Value))

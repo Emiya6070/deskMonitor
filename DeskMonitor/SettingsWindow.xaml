@@ -115,8 +115,12 @@
       <Button Grid.Column="1" Content="重新分析" Click="RefreshTokenAnalysis" Margin="8,0,0,0"/>
      </Grid>
      <TextBlock x:Name="TokenAnalysisStatus" Text="等待分析本地 Codex 会话…" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
+     <TextBlock Text="勾选“不计费”后，该模型的 Token 仍显示，但不计入美元估算；保存后同步到用量卡片。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
      <ListView x:Name="TokenModelList" Height="170" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}" Margin="0,0,0,12">
-      <ListView.View><GridView><GridViewColumn Header="模型" DisplayMemberBinding="{Binding Model}" Width="135"/><GridViewColumn Header="Token" DisplayMemberBinding="{Binding Total}" Width="72"/><GridViewColumn Header="输入 / 缓存 / 输出" DisplayMemberBinding="{Binding Breakdown}" Width="165"/><GridViewColumn Header="估算 USD" DisplayMemberBinding="{Binding Cost}" Width="75"/></GridView></ListView.View>
+      <ListView.View><GridView>
+       <GridViewColumn Header="不计费" Width="65"><GridViewColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding Excluded, Mode=OneWay}" Click="TokenModelExcludeClicked" AutomationProperties.Name="排除该模型计费"/></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+       <GridViewColumn Header="模型" DisplayMemberBinding="{Binding Model}" Width="120"/><GridViewColumn Header="Token" DisplayMemberBinding="{Binding Total}" Width="65"/><GridViewColumn Header="输入 / 缓存 / 输出" DisplayMemberBinding="{Binding Breakdown}" Width="150"/><GridViewColumn Header="估算 USD" DisplayMemberBinding="{Binding Cost}" Width="75"/>
+      </GridView></ListView.View>
      </ListView>
      <Grid Margin="0,10,0,6"><TextBlock Text="用量卡片高度"/><TextBlock x:Name="UsageHeightValue" HorizontalAlignment="Right" Foreground="{DynamicResource Accent}"/></Grid>
     <Slider x:Name="UsageHeightSlider" Minimum="0" Maximum="120" TickFrequency="4" IsSnapToTickEnabled="True" ValueChanged="UsageHeightChanged" AutomationProperties.Name="用量卡片额外高度" Margin="0,0,0,6"/>

@@ -16,9 +16,9 @@ internal static class CodexTokenAnalysisChecks
                 type = "event_msg",
                 payload = new { type = "token_count", info = new { last_token_usage = last, total_token_usage = total } }
             });
-            static object T(long input, long cached, long output, long reasoning = 0) => new
+            static object T(long input, long cached, long output, long reasoning = 0, long cacheWrite = 0) => new
             {
-                input_tokens = input, cached_input_tokens = cached, cache_write_input_tokens = 0,
+                input_tokens = input, cached_input_tokens = cached, cache_write_input_tokens = cacheWrite,
                 output_tokens = output, reasoning_output_tokens = reasoning, total_tokens = input + output
             };
             var first = T(100, 40, 10, 4);
@@ -48,6 +48,39 @@ internal static class CodexTokenAnalysisChecks
                 "Codex analyzer estimates known models and identifies unknown pricing");
             check(report.Models.Single(x => x.Model == "gpt-5.6-sol").Tokens.TotalTokens == 165,
                 "Codex analyzer uses last usage deltas rather than cumulative totals");
+            var excluded = CodexTokenAnalyzer.ApplyCostExclusions(report, ["GPT-5.6-SOL", "private-model"]);
+            check(excluded.Tokens == report.Tokens && excluded.Models.Single(x => x.Model == "gpt-5.6-sol").ExcludedFromCost
+                && excluded.Models.Single(x => x.Model == "gpt-5.6-sol").EstimatedCostUsd == 0m
+                && excluded.Models.Single(x => x.Model == "gpt-5.6-luna").EstimatedCostUsd == report.Models.Single(x => x.Model == "gpt-5.6-luna").EstimatedCostUsd
+                && excluded.UnpricedTokens == 0 && excluded.EstimatedCostUsd < report.EstimatedCostUsd,
+                "excluded models retain tokens but do not contribute to estimated cost or unpriced totals");
+            foreach (var file in Directory.EnumerateFiles(directory)) File.Delete(file);
+            var sol = T(1000, 200, 100, cacheWrite: 100);
+            var luna6 = T(1100, 210, 110, cacheWrite: 110);
+            var terraLong = T(300_000, 100_000, 20_000, cacheWrite: 10_000);
+            File.WriteAllLines(Path.Combine(directory, "pricing.jsonl"),
+            [
+                Context("gpt-6-sol"),
+                Usage("2026-09-20T04:00:00Z", sol, sol),
+                Context("gpt-6-luna"),
+                Usage("2026-09-20T02:00:00Z", luna6, luna6),
+                Context("gpt-5.6-terra"),
+                Usage("2026-09-20T03:00:00Z", terraLong, terraLong)
+            ]);
+            var pricing = await CodexTokenAnalyzer.ReadAsync(CodexTokenRangeKind.Today, null, null,
+                CancellationToken.None, directory, now);
+            check(pricing.UnpricedTokens == 0 && pricing.Tokens.TotalTokens == 322_310
+                && Math.Abs(pricing.Models.Single(x => x.Model == "gpt-6-sol").EstimatedCostUsd!.Value - .00269m) < .000000001m
+                && Math.Abs(pricing.Models.Single(x => x.Model == "gpt-6-luna").EstimatedCostUsd!.Value - .00014885m) < .000000001m,
+                "Codex analyzer prices GPT-6 Sol and Luna input, cache reads, cache writes and output");
+            check(Math.Abs(pricing.Models.Single(x => x.Model == "gpt-5.6-terra").EstimatedCostUsd!.Value - 1.21m) < .000000001m,
+                "Codex analyzer applies long-context pricing above 272K input tokens");
+            var excludedOnRead = await CodexTokenAnalyzer.ReadAsync(CodexTokenRangeKind.Today, null, null,
+                CancellationToken.None, directory, now, ["gpt-6-sol"]);
+            check(excludedOnRead.Tokens == pricing.Tokens
+                && excludedOnRead.Models.Single(x => x.Model == "gpt-6-sol").ExcludedFromCost
+                && excludedOnRead.EstimatedCostUsd == pricing.EstimatedCostUsd - .00269m,
+                "saved model exclusions are applied when a token report is read");
             var quota = new QuotaWindow(25, 300, now.AddHours(2));
             var bounds = CodexTokenAnalyzer.ResolveRange(CodexTokenRangeKind.ShortReset, quota, null, now);
             check(bounds.From == now.AddHours(-3) && bounds.Label.Contains("短周期"), "reset range starts at reset timestamp minus window duration");

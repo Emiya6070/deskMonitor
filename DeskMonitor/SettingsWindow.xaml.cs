@@ -50,7 +50,26 @@ public partial class SettingsWindow : Window
     private int _request;
     private int _tokenAnalysisRequest;
     private bool _ready, _saving;
-    private sealed record TokenModelRow(string Model, string Total, string Breakdown, string Cost);
+    private readonly HashSet<string> _excludedBillingModels;
+    private CodexTokenReport? _rawTokenReport;
+    private TokenModelRow[] _tokenModelRows = [];
+    private string? _tokenQuotaNote;
+    private sealed class TokenModelRow(CodexModelUsage usage) : INotifyPropertyChanged
+    {
+        public string Model { get; } = usage.Model;
+        public string Total { get; } = FormatTokens(usage.Tokens.TotalTokens);
+        public string Breakdown { get; } = $"{FormatTokens(usage.Tokens.InputTokens)} / {FormatTokens(usage.Tokens.CachedInputTokens)} / {FormatTokens(usage.Tokens.OutputTokens)}";
+        public bool Excluded { get; private set; }
+        public string Cost { get; private set; } = "";
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public void Update(CodexModelUsage model)
+        {
+            Excluded = model.ExcludedFromCost;
+            Cost = Excluded ? "已排除" : model.EstimatedCostUsd is { } cost ? $"${cost:0.0000}" : "未计价";
+            PropertyChanged?.Invoke(this, new(nameof(Excluded)));
+            PropertyChanged?.Invoke(this, new(nameof(Cost)));
+        }
+    }
     private MarketKind Kind => StockOption.IsChecked == true ? MarketKind.UsStock : UsdcOption.IsChecked == true ? MarketKind.UsdcPerpetual : FuturesOption.IsChecked == true ? MarketKind.UsdtPerpetual : MarketKind.Spot;
     public SettingsWindow(Preferences preferences, Dictionary<MarketKind, IReadOnlyList<MarketSymbol>> catalogs, Func<Preferences, bool, Task> save)
     {
@@ -69,6 +88,7 @@ public partial class SettingsWindow : Window
         AboutRuntime.Text = $".NET {Environment.Version} · {RuntimeInformation.ProcessArchitecture}";
         preferences = Preferences.Normalize(preferences);
         _original = preferences;
+        _excludedBillingModels = new(preferences.CodexExcludedBillingModels, StringComparer.OrdinalIgnoreCase);
         _feed = new BinanceFeed(preferences.Proxy);
         _catalogs = catalogs;
         _save = save;
@@ -241,6 +261,22 @@ public partial class SettingsWindow : Window
     private async void TokenAnalysisRangeChanged(object sender, SelectionChangedEventArgs e)
     { if (_ready) await LoadTokenAnalysisAsync(); }
     private async void RefreshTokenAnalysis(object sender, RoutedEventArgs e) => await LoadTokenAnalysisAsync();
+    private void TokenModelExcludeClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: TokenModelRow row } option) return;
+        if (option.IsChecked == true) _excludedBillingModels.Add(row.Model);
+        else _excludedBillingModels.Remove(row.Model);
+        RenderTokenAnalysis();
+    }
+    private void RenderTokenAnalysis()
+    {
+        if (_rawTokenReport is null) return;
+        var report = CodexTokenAnalyzer.ApplyCostExclusions(_rawTokenReport, _excludedBillingModels);
+        foreach (var (row, model) in _tokenModelRows.Zip(report.Models)) row.Update(model);
+        TokenAnalysisStatus.Text = $"{report.RangeLabel} · 共 {FormatTokens(report.Tokens.TotalTokens)} token · 估算 ${report.EstimatedCostUsd:0.0000}"
+            + (report.UnpricedTokens > 0 ? $" · {FormatTokens(report.UnpricedTokens)} 未计价" : "")
+            + (_excludedBillingModels.Count > 0 ? $" · 已排除 {_excludedBillingModels.Count} 个模型计费" : "") + _tokenQuotaNote;
+    }
     private async Task LoadTokenAnalysisAsync()
     {
         if (CodexTokenRangeChoice.SelectedIndex < 0) return;
@@ -263,12 +299,11 @@ public partial class SettingsWindow : Window
             }
             var report = await CodexTokenAnalyzer.ReadAsync(range, primary, secondary, _lifetime.Token);
             if (request != _tokenAnalysisRequest || !_ready) return;
-            TokenModelList.ItemsSource = report.Models.Select(x => new TokenModelRow(x.Model,
-                FormatTokens(x.Tokens.TotalTokens),
-                $"{FormatTokens(x.Tokens.InputTokens)} / {FormatTokens(x.Tokens.CachedInputTokens)} / {FormatTokens(x.Tokens.OutputTokens)}",
-                x.EstimatedCostUsd is { } cost ? $"${cost:0.0000}" : "未计价")).ToArray();
-            TokenAnalysisStatus.Text = $"{report.RangeLabel} · 共 {FormatTokens(report.Tokens.TotalTokens)} token · 估算 ${report.EstimatedCostUsd:0.0000}"
-                + (report.UnpricedTokens > 0 ? $" · {FormatTokens(report.UnpricedTokens)} 未计价" : "") + quotaNote;
+            _rawTokenReport = report;
+            _tokenQuotaNote = quotaNote;
+            _tokenModelRows = report.Models.Select(x => new TokenModelRow(x)).ToArray();
+            TokenModelList.ItemsSource = _tokenModelRows;
+            RenderTokenAnalysis();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
@@ -425,6 +460,7 @@ public partial class SettingsWindow : Window
                 SmallCornerRadius = SmallRadiusDefault.IsChecked == true ? null : SmallRadiusSlider.Value,
                 UsageExtraHeight = UsageHeightSlider.Value,
                 CodexTokenRange = (CodexTokenRangeKind)CodexTokenRangeChoice.SelectedIndex,
+                CodexExcludedBillingModels = _excludedBillingModels.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
                 Skin = ((SkinOption)SkinChoice.SelectedItem).Id, TextScale = TextScaleSlider.Value, NumberScale = NumberScaleSlider.Value,
                 MarketHeightAdjustment = MarketHeightSlider.Value,
                 MonospaceNumbers = MonospaceOption.IsChecked == true, ShowTrends = TrendsOption.IsChecked == true,

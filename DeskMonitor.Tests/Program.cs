@@ -229,6 +229,13 @@ var usageSize = Preferences.Normalize(settings with { UsageExtraHeight = 48 });
 Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(usageSize))!).UsageExtraHeight == 48, "usage height persists");
 var usageRange = Preferences.Normalize(settings with { CodexTokenRange = CodexTokenRangeKind.Last7Days });
 Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(usageRange))!).CodexTokenRange == CodexTokenRangeKind.Last7Days, "Codex token range persists");
+var billingExclusions = Preferences.Normalize(settings with { CodexExcludedBillingModels = ["gpt-6-sol", "gpt-5.6-luna"] });
+Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(billingExclusions))!).CodexExcludedBillingModels.SequenceEqual(billingExclusions.CodexExcludedBillingModels),
+    "excluded billing models persist");
+var duplicateBillingModelsRejected = false;
+try { Preferences.Normalize(settings with { CodexExcludedBillingModels = ["gpt-6-sol", "GPT-6-SOL"] }); }
+catch (InvalidDataException) { duplicateBillingModelsRejected = true; }
+Check(duplicateBillingModelsRejected, "duplicate excluded billing models are rejected");
 foreach (var height in new[] { -1d, 121d, double.NaN })
 {
     var rejected = false;

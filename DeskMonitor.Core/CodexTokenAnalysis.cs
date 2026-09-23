@@ -26,7 +26,8 @@ public sealed record CodexModelUsage(
     string Model,
     CodexTokenTotals Tokens,
     decimal? EstimatedCostUsd,
-    long UnpricedTokens);
+    long UnpricedTokens,
+    bool ExcludedFromCost = false);
 
 public sealed record CodexTokenReport(
     string RangeLabel,
@@ -67,7 +68,8 @@ public static class CodexTokenAnalyzer
         QuotaWindow? secondary,
         CancellationToken cancellationToken,
         string? sessionsDirectory = null,
-        DateTimeOffset? nowOverride = null)
+        DateTimeOffset? nowOverride = null,
+        IReadOnlyCollection<string>? excludedBillingModels = null)
     {
         var now = nowOverride ?? DateTimeOffset.Now;
         var (from, label) = ResolveRange(range, primary, secondary, now);
@@ -104,7 +106,23 @@ public static class CodexTokenAnalyzer
         {
             total.Add(row.Freeze()); total.Cost += row.Cost; total.Unpriced += row.Unpriced;
         }
-        return new(label, from, now, total.Freeze(), total.Cost, total.Unpriced, models, filesRead, DateTimeOffset.UtcNow);
+        return ApplyCostExclusions(new(label, from, now, total.Freeze(), total.Cost, total.Unpriced,
+            models, filesRead, DateTimeOffset.UtcNow), excludedBillingModels);
+    }
+
+    public static CodexTokenReport ApplyCostExclusions(CodexTokenReport report, IReadOnlyCollection<string>? excludedBillingModels)
+    {
+        if (excludedBillingModels is null || excludedBillingModels.Count == 0) return report;
+        var excluded = new HashSet<string>(excludedBillingModels, StringComparer.OrdinalIgnoreCase);
+        var models = report.Models.Select(model => excluded.Contains(model.Model)
+            ? model with { EstimatedCostUsd = 0m, UnpricedTokens = 0, ExcludedFromCost = true }
+            : model).ToArray();
+        return report with
+        {
+            Models = models,
+            EstimatedCostUsd = models.Sum(model => model.EstimatedCostUsd ?? 0m),
+            UnpricedTokens = models.Sum(model => model.UnpricedTokens)
+        };
     }
 
     private static bool IsCandidate(string file, DateTimeOffset from)
@@ -265,8 +283,10 @@ public static class CodexTokenAnalyzer
 
     private static void Add(Dictionary<string, MutableUsage> rows, string model, RawUsage raw)
     {
-        var normalized = new CodexTokenTotals(Math.Max(0, raw.Input - raw.CachedInput), raw.CachedInput,
-            raw.CacheWrite, raw.Output, raw.Reasoning);
+        var cachedInput = Math.Min(raw.CachedInput, raw.Input);
+        var cacheWrite = Math.Min(raw.CacheWrite, raw.Input - cachedInput);
+        var normalized = new CodexTokenTotals(raw.Input - cachedInput - cacheWrite, cachedInput,
+            cacheWrite, raw.Output, raw.Reasoning);
         if (normalized.TotalTokens <= 0) return;
         if (!rows.TryGetValue(model, out var row)) rows[model] = row = new();
         row.Add(normalized);
@@ -284,11 +304,13 @@ public static class CodexTokenAnalyzer
     {
         var value = model.ToLowerInvariant();
         if (value.Contains("gpt-6-astra")) return new(10m, 1m, 12.5m, 50m, true);
+        if (value.Contains("gpt-6-sol")) return new(2m, .2m, 2.5m, 10m, true);
+        if (value.Contains("gpt-6-luna")) return new(.1m, .01m, .125m, .5m, true);
         if (value.Contains("gpt-5.6-sol") || value == "gpt-5.6") return new(4m, .4m, 5m, 20m, true);
-        if (value.Contains("gpt-5.6-terra")) return new(2m, .2m, 2.5m, 12m);
-        if (value.Contains("gpt-5.6-luna")) return new(.2m, .02m, .25m, 1.2m);
+        if (value.Contains("gpt-5.6-terra")) return new(2m, .2m, 2.5m, 12m, true);
+        if (value.Contains("gpt-5.6-luna")) return new(.2m, .02m, .25m, 1.2m, true);
         if (value.Contains("gpt-5.5")) return new(5m, .5m, 0m, 30m, true);
-        if (value.Contains("gpt-5.4")) return new(2.5m, .25m, 0m, 15m);
+        if (value.Contains("gpt-5.4")) return new(2.5m, .25m, 0m, 15m, true);
         if (value.Contains("gpt-5.3-codex")) return new(1.75m, .175m, 0m, 14m);
         return null;
     }
