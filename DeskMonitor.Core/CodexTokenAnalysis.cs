@@ -303,6 +303,9 @@ public static class CodexTokenAnalyzer
     private static Rates? FindRates(string model)
     {
         var value = model.ToLowerInvariant();
+        // Standard USD per 1M tokens; verified 2026-10-04:
+        // https://developers.openai.com/api/docs/models/gpt-6.1-sol
+        if (value.Contains("gpt-6.1-sol")) return new(2m, .1m, 2.5m, 10m, true);
         if (value.Contains("gpt-6-astra")) return new(10m, 1m, 12.5m, 50m, true);
         if (value.Contains("gpt-6-sol")) return new(2m, .2m, 2.5m, 10m, true);
         if (value.Contains("gpt-6-luna")) return new(.1m, .01m, .125m, .5m, true);

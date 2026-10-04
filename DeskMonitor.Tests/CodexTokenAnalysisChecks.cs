@@ -81,6 +81,38 @@ internal static class CodexTokenAnalysisChecks
                 && excludedOnRead.Models.Single(x => x.Model == "gpt-6-sol").ExcludedFromCost
                 && excludedOnRead.EstimatedCostUsd == pricing.EstimatedCostUsd - .00269m,
                 "saved model exclusions are applied when a token report is read");
+
+            foreach (var file in Directory.EnumerateFiles(directory)) File.Delete(file);
+            // Published Standard prices at the inclusive 272K boundary and just above it.
+            var atThreshold = T(272_000, 100_000, 20_000, 5_000, 10_000);
+            var aboveThreshold = T(272_001, 100_000, 20_000, 5_000, 10_000);
+            File.WriteAllLines(Path.Combine(directory, "sol61-pricing.jsonl"),
+            [
+                Context("gpt-6.1-sol"),
+                Usage("2026-09-20T01:00:00Z", sol, sol),
+                Context("GPT-6.1-SOL"),
+                Usage("2026-09-20T02:00:00Z", atThreshold, atThreshold),
+                Usage("2026-09-20T03:00:00Z", aboveThreshold, aboveThreshold)
+            ]);
+            File.WriteAllLines(Path.Combine(directory, "sol6-pricing.jsonl"),
+            [
+                Context("gpt-6-sol"),
+                Usage("2026-09-20T04:00:00Z", sol, sol)
+            ]);
+            var sol61Pricing = await CodexTokenAnalyzer.ReadAsync(CodexTokenRangeKind.Today, null, null,
+                CancellationToken.None, directory, now);
+            var sol61Model = sol61Pricing.Models.Single(x => x.Model == "gpt-6.1-sol");
+            check(sol61Pricing.UnpricedTokens == 0 && sol61Model.EstimatedCostUsd == 1.579674m,
+                "GPT-6.1 Sol uses its Standard input, cache read, cache write and output rates at and above 272K");
+            check(sol61Model.Tokens == new CodexTokenTotals(324_701, 200_200, 20_100, 40_100, 10_000),
+                "GPT-6.1 Sol keeps cache inputs mutually exclusive and reasoning within output");
+            check(sol61Pricing.Models.Single(x => x.Model == "gpt-6-sol").EstimatedCostUsd == .00269m,
+                "GPT-6 Sol retains its higher cache read rate independently of GPT-6.1 Sol");
+            var excludedSol61 = await CodexTokenAnalyzer.ReadAsync(CodexTokenRangeKind.Today, null, null,
+                CancellationToken.None, directory, now, ["GPT-6.1-SOL"]);
+            check(excludedSol61.Tokens == sol61Pricing.Tokens && excludedSol61.EstimatedCostUsd == .00269m
+                && excludedSol61.Models.Single(x => x.Model == "gpt-6.1-sol").ExcludedFromCost,
+                "GPT-6.1 Sol cost exclusion preserves tokens and excludes its entire estimate");
             var quota = new QuotaWindow(25, 300, now.AddHours(2));
             var bounds = CodexTokenAnalyzer.ResolveRange(CodexTokenRangeKind.ShortReset, quota, null, now);
             check(bounds.From == now.AddHours(-3) && bounds.Label.Contains("短周期"), "reset range starts at reset timestamp minus window duration");

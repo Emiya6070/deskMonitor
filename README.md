@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.10-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.11-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；加密货币行情不需要 API Key，默认的 Alpaca 美股源需要用户自己的 Market Data Key。
 
@@ -82,6 +82,8 @@ Token 区间可选短周期重置后、长周期重置后、今天、最近 7 �
 Token 分析只扫描 `%USERPROFILE%/.codex/sessions/**/*.jsonl` 中的时间、`turn_context.model` 和 `token_count` 数字字段，不保存或显示提示词、回复、代码与路径。Codex 的输入计数包含缓存读取和缓存写入，统计时将三类输入拆开并分别计价；reasoning 是输出子集，不重复计费。已知模型按公开 Standard API 单价估算，长上下文请求按其对应分档处理；未知模型仍统计 Token 并标为「未计价」。估算值不是 ChatGPT/Codex 订阅实际账单，也不代表额度百分比与 Token 存在固定换算关系。
 
 在「附加显示 → Codex 用量」的模型列表中勾选「不计费」，可将指定模型从美元估算中排除。该模型的 Token 使用量仍显示；选择会随设置保存，并同步应用到桌面用量卡片。
+
+2026-10-04 核对官方价格，新增 [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) 的 Standard API 估算：每百万 Token 普通输入 $2、缓存读取 $0.10、缓存写入 $2.50、输出 $10；单次输入超过 272,000 Token 时，输入及缓存费率乘 2、输出费率乘 1.5。GPT-6 Sol 仍使用其自身的 $0.20 缓存读取单价。
 
 每分钟查询一次，每次查询后退出子进程；隐藏挂件或关闭卡片时停止查询。读取失败时保留并淡化上次成功数值，标明上次更新时间，悬停查看原因；继续按每分钟周期自动重试，也可手动刷新。尚未读取成功时不补造数据。超过两分钟的数据变淡，到达重置时间显示「待更新」，不会自行补成 100%。查询超时为 20 秒；正常退出、终止后退出和日志管道清理各有最多 2 秒等待，防止清理一直占用刷新状态。设置可指定 Codex EXE；留空依次查找用户级标准安装位置和 PATH 中的 `codex.exe`。登录与 `CODEX_HOME` 沿用本机 Codex 环境；API Key 模式不保证有 ChatGPT 额度。
 
