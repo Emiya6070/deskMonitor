@@ -63,6 +63,11 @@ public sealed record CodexUsage(QuotaWindow? Primary, QuotaWindow? Secondary, Da
 public static class CodexUsageClient
 {
     public static string ResolveExecutable(string? configuredPath)
+        => ResolveExecutable(configuredPath,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetEnvironmentVariable("PATH") ?? "");
+
+    internal static string ResolveExecutable(string? configuredPath, string localApplicationData, string searchPath)
     {
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
@@ -70,9 +75,16 @@ public static class CodexUsageClient
                 throw new IOException("请选择有效的 Codex .exe 完整路径。");
             return configuredPath;
         }
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var candidates = new[] { Path.Combine(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe") }
-            .Concat((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+        // The desktop app installs its CLI in a versioned bin directory, which
+        // need not appear in the PATH inherited by a separately launched widget.
+        var desktopBin = Path.Combine(localApplicationData, "OpenAI", "Codex", "bin");
+        var desktopExecutables = Directory.Exists(desktopBin)
+            ? Directory.EnumerateDirectories(desktopBin).Select(p => Path.Combine(p, "codex.exe"))
+                .Where(File.Exists).OrderByDescending(File.GetLastWriteTimeUtc).ThenBy(p => p, StringComparer.OrdinalIgnoreCase)
+            : Enumerable.Empty<string>();
+        var candidates = new[] { Path.Combine(localApplicationData, "Programs", "OpenAI", "Codex", "bin", "codex.exe") }
+            .Concat(desktopExecutables)
+            .Concat(searchPath.Split(Path.PathSeparator)
                 .Where(Path.IsPathFullyQualified).Select(p => Path.Combine(p, "codex.exe")));
         return candidates.FirstOrDefault(File.Exists) ?? throw new IOException("未找到 Codex；请在设置中选择 codex.exe，并在 Codex 中登录 ChatGPT。");
     }

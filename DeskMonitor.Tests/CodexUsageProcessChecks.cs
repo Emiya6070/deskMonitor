@@ -62,6 +62,7 @@ internal static class CodexUsageProcessChecks
     public static async Task RunAsync(Action<bool, string> check)
     {
         if (!OperatingSystem.IsWindows()) return;
+        CheckExecutableDiscovery(check);
         var previous = Environment.GetEnvironmentVariable(FakeCodexServer.ModeVariable);
         var previousAttempt = Environment.GetEnvironmentVariable(FakeCodexServer.AttemptVariable);
         var attemptFile = Path.GetTempFileName();
@@ -117,6 +118,67 @@ internal static class CodexUsageProcessChecks
             Environment.SetEnvironmentVariable(FakeCodexServer.ModeVariable, previous);
             Environment.SetEnvironmentVariable(FakeCodexServer.AttemptVariable, previousAttempt);
             File.Delete(attemptFile);
+        }
+    }
+
+    private static void CheckExecutableDiscovery(Action<bool, string> check)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"DeskMonitor-codex-path-{Guid.NewGuid():N}");
+        var local = Path.Combine(root, "local");
+        var desktopBin = Path.Combine(local, "OpenAI", "Codex", "bin");
+        var writtenAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        string CreateExecutable(string path, DateTime modifiedAt)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "");
+            File.SetLastWriteTimeUtc(path, modifiedAt);
+            return path;
+        }
+        try
+        {
+            var v2 = CreateExecutable(Path.Combine(desktopBin, "v2", "codex.exe"), writtenAt);
+            check(CodexUsageClient.ResolveExecutable(null, local, "") == v2,
+                "Codex desktop version directory is discovered without PATH");
+            var v1 = CreateExecutable(Path.Combine(desktopBin, "v1", "codex.exe"), writtenAt.AddHours(-1));
+            check(CodexUsageClient.ResolveExecutable(null, local, "") == v2,
+                "Codex desktop discovery selects the most recently written executable");
+            File.SetLastWriteTimeUtc(v1, writtenAt);
+            check(CodexUsageClient.ResolveExecutable(null, local, "") == v1,
+                "equal Codex desktop executable timestamps use a stable alphabetical path order");
+            var v3 = CreateExecutable(Path.Combine(desktopBin, "v3", "codex.exe"), writtenAt.AddHours(1));
+            check(CodexUsageClient.ResolveExecutable(null, local, "") == v3,
+                "Codex desktop installation updates are discovered on the next lookup");
+            Directory.CreateDirectory(Path.Combine(desktopBin, "v4-incomplete"));
+            check(CodexUsageClient.ResolveExecutable(null, local, "") == v3,
+                "an incomplete Codex desktop version without an executable does not affect discovery");
+
+            var pathExe = CreateExecutable(Path.Combine(root, "path", "codex.exe"), writtenAt.AddHours(2));
+            var searchPath = Path.GetDirectoryName(pathExe)!;
+            check(CodexUsageClient.ResolveExecutable(null, local, searchPath) == v3,
+                "Codex desktop installation is preferred to PATH");
+            var legacy = CreateExecutable(Path.Combine(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe"), writtenAt.AddHours(-2));
+            check(CodexUsageClient.ResolveExecutable(null, local, searchPath) == legacy,
+                "the existing standard Codex installation retains discovery priority");
+            check(CodexUsageClient.ResolveExecutable(null, Path.Combine(root, "empty-local"), searchPath) == pathExe,
+                "Codex PATH discovery remains available when standard installations are absent");
+            check(CodexUsageClient.ResolveExecutable(pathExe, local, searchPath) == pathExe,
+                "an explicitly configured Codex executable takes priority over discovery");
+            var nonExecutable = CreateExecutable(Path.Combine(root, "codex.txt"), writtenAt);
+            foreach (var invalid in new[] { Path.Combine(root, "missing.exe"), "codex.exe", nonExecutable })
+            {
+                var rejected = false;
+                try { CodexUsageClient.ResolveExecutable(invalid, local, searchPath); }
+                catch (IOException ex) when (ex.Message.Contains("有效的 Codex .exe")) { rejected = true; }
+                check(rejected, "an invalid configured Codex path is rejected instead of silently replaced");
+            }
+            var missing = false;
+            try { CodexUsageClient.ResolveExecutable(null, Path.Combine(root, "empty-local"), ""); }
+            catch (IOException ex) when (ex.Message.Contains("未找到 Codex")) { missing = true; }
+            check(missing, "missing Codex installations produce an explicit discovery error");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
 }

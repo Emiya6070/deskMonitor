@@ -4,7 +4,7 @@ Windows 11 原生桌面行情挂件，.NET 8 / WPF，无浏览器内核，无第
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.11-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
+从 [GitHub Releases](https://github.com/Emiya6070/deskMonitor/releases/latest) 下载 `DeskMonitor-v0.3.12-win-x64.zip`，完整解压后运行 `DeskMonitor.exe`。不要直接在压缩包内运行。
 
 运行环境：Windows 11 x64、[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)（选择 Windows x64 的 Desktop Runtime）。Codex 用量为可选功能，需要本机安装 Codex 并登录 ChatGPT；加密货币行情不需要 API Key，默认的 Alpaca 美股源需要用户自己的 Market Data Key。
 
@@ -85,7 +85,7 @@ Token 分析只扫描 `%USERPROFILE%/.codex/sessions/**/*.jsonl` 中的时间、
 
 2026-10-04 核对官方价格，新增 [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) 的 Standard API 估算：每百万 Token 普通输入 $2、缓存读取 $0.10、缓存写入 $2.50、输出 $10；单次输入超过 272,000 Token 时，输入及缓存费率乘 2、输出费率乘 1.5。GPT-6 Sol 仍使用其自身的 $0.20 缓存读取单价。
 
-每分钟查询一次，每次查询后退出子进程；隐藏挂件或关闭卡片时停止查询。读取失败时保留并淡化上次成功数值，标明上次更新时间，悬停查看原因；继续按每分钟周期自动重试，也可手动刷新。尚未读取成功时不补造数据。超过两分钟的数据变淡，到达重置时间显示「待更新」，不会自行补成 100%。查询超时为 20 秒；正常退出、终止后退出和日志管道清理各有最多 2 秒等待，防止清理一直占用刷新状态。设置可指定 Codex EXE；留空依次查找用户级标准安装位置和 PATH 中的 `codex.exe`。登录与 `CODEX_HOME` 沿用本机 Codex 环境；API Key 模式不保证有 ChatGPT 额度。
+每分钟查询一次，每次查询后退出子进程；隐藏挂件或关闭卡片时停止查询。读取失败时保留并淡化上次成功数值，标明上次更新时间，悬停查看原因；继续按每分钟周期自动重试，也可手动刷新。尚未读取成功时不补造数据。超过两分钟的数据变淡，到达重置时间显示「待更新」，不会自行补成 100%。查询超时为 20 秒；正常退出、终止后退出和日志管道清理各有最多 2 秒等待，防止清理一直占用刷新状态。设置可指定 Codex EXE；留空依次查找用户级标准安装位置、桌面版的 `%LOCALAPPDATA%/OpenAI/Codex/bin/<版本>/codex.exe`（选择文件更新时间最新的版本）和 PATH 中的 `codex.exe`。登录与 `CODEX_HOME` 沿用本机 Codex 环境；API Key 模式不保证有 ChatGPT 额度。
 
 参考 [QuotaLoom 的数据接入设计](https://github.com/EricsmOOn/quota-loom/blob/main/docs/ARCHITECTURE.md)，本实现使用 C# 原生卡片，未引入其 Tauri/React 运行时或复制其源码。协议依据 [Codex App Server 官方文档](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)。
 
