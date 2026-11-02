@@ -1,0 +1,20 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="10dp" android:background="@drawable/widget_dark">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical">
+        <TextView android:id="@+id/title" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+            android:gravity="center_vertical" android:text="@string/widget_title" android:maxLines="1" android:ellipsize="end" android:textSize="14sp" android:textStyle="bold" android:textColor="#F0F6EF" />
+        <TextView android:id="@+id/settings" android:layout_width="48dp" android:layout_height="match_parent" android:gravity="center"
+            android:text="@string/settings" android:textSize="12sp" android:textColor="#BCCDC2" android:contentDescription="@string/settings_description" />
+        <TextView android:id="@+id/refresh" android:layout_width="48dp" android:layout_height="match_parent" android:gravity="center"
+            android:text="@string/refresh" android:textSize="12sp" android:textColor="#9EE7B8" android:contentDescription="@string/refresh_description" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/columns" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingBottom="4dp">
+        <TextView android:id="@+id/symbol_heading" style="@style/QuoteCell" android:layout_weight="0.28" android:gravity="start" android:text="@string/symbol_heading" />
+        <TextView android:id="@+id/price_heading" style="@style/QuoteCell" android:layout_weight="0.44" android:paddingStart="0dp" android:paddingEnd="8dp" android:text="@string/price_heading" />
+        <TextView android:id="@+id/change_heading" style="@style/QuoteCell" android:layout_weight="0.28" android:text="@string/change_heading" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" />
+    <TextView android:id="@+id/footer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+        android:includeFontPadding="false" android:text="@string/initial_footer" android:textColor="#BCCDC2" android:textSize="11sp" android:lines="2" android:ellipsize="end" />
+</LinearLayout>

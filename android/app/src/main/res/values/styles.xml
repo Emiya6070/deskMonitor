@@ -1,0 +1,29 @@
+<resources>
+    <style name="QuoteCell">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:gravity">end|center_vertical</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">#BCCDC2</item>
+    </style>
+    <string name="symbol_heading">币种</string>
+    <string name="price_heading">价格</string>
+    <string name="change_heading">24h 涨跌</string>
+    <style name="AppTheme" parent="BaseAppTheme" />
+    <style name="BaseAppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#16735D</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">#F3F5F2</item>
+    </style>
+    <string name="widget_description">币安行情快照：价格、24h 涨跌与永续资金费率</string>
+    <string name="widget_title">DeskMonitor</string>
+    <string name="settings">设置</string>
+    <string name="settings_description">配置此行情小组件</string>
+    <string name="refresh">刷新</string>
+    <string name="refresh_description">刷新行情快照</string>
+    <string name="initial_footer">BINANCE · 行情快照 · 点击设置</string>
+</resources>

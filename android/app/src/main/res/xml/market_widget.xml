@@ -1,0 +1,9 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="280dp" android:minHeight="280dp"
+    android:minResizeWidth="180dp" android:minResizeHeight="180dp"
+    android:targetCellWidth="4" android:targetCellHeight="3"
+    android:updatePeriodMillis="0" android:initialLayout="@layout/widget_market"
+    android:previewLayout="@layout/widget_market" android:description="@string/widget_description"
+    android:configure="com.deskmonitor.android.ConfigureActivity"
+    android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

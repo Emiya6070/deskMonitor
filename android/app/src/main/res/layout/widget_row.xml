@@ -1,0 +1,18 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingTop="4dp" android:paddingBottom="4dp">
+    <LinearLayout android:id="@+id/quote_line" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+        <TextView android:id="@+id/symbol" style="@style/QuoteCell"
+            android:layout_weight="0.28" android:gravity="start" android:textSize="13sp" android:textStyle="bold" android:paddingStart="0dp" android:paddingEnd="4dp" />
+        <TextView android:id="@+id/price" style="@style/QuoteCell"
+            android:layout_weight="0.44" android:textSize="14sp" android:textStyle="bold" android:fontFamily="sans-serif-medium" android:paddingStart="0dp" android:paddingEnd="8dp"
+            android:autoSizeTextType="uniform" android:autoSizeMinTextSize="11sp" android:autoSizeMaxTextSize="14sp" android:autoSizeStepGranularity="1sp" />
+        <TextView android:id="@+id/change" style="@style/QuoteCell"
+            android:layout_weight="0.28" android:textSize="12sp" android:textStyle="bold"
+            android:autoSizeTextType="uniform" android:autoSizeMinTextSize="11sp" android:autoSizeMaxTextSize="12sp" android:autoSizeStepGranularity="1sp" />
+    </LinearLayout>
+    <TextView android:id="@+id/details" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:includeFontPadding="false" android:paddingTop="3dp" android:textSize="11sp" android:textColor="#BCCDC2" android:maxLines="2" android:ellipsize="end" />
+    <TextView android:id="@+id/funding" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:includeFontPadding="false" android:paddingTop="2dp" android:textSize="11sp" android:textColor="#BCCDC2" android:maxLines="2" android:ellipsize="end" />
+</LinearLayout>
