@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -23,6 +25,19 @@ public sealed class ProviderUsageCard : UserControl
         var title = new TextBlock { Text = settings.Title, FontWeight = FontWeights.SemiBold, FontSize = 12, TextWrapping = TextWrapping.Wrap };
         title.SetResourceReference(TextBlock.ForegroundProperty, "UsageAccent");
         panel.Children.Add(title); panel.Children.Add(_rows); panel.Children.Add(_status);
+        if (settings.Provider == UsageProvider.OpenAI)
+        {
+            var billing = new Button { Content = "查看余额与账单 ↗", HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(8, 4, 8, 4), FontSize = 11,
+                ToolTip = "在浏览器登录 OpenAI，查看所选组织的余额；此入口无需 API Key。" };
+            billing.Click += (_, _) =>
+            {
+                try { Process.Start(new ProcessStartInfo("https://platform.openai.com/settings/organization/billing/overview") { UseShellExecute = true }); }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                { MessageBox.Show("无法打开浏览器，请访问 OpenAI Platform 的 Billing 页面。", "DeskMonitor", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            };
+            panel.Children.Add(billing);
+        }
         var border = new Border { Child = panel, Padding = new Thickness(preferences.Style == CardStyle.Small ? 10 : 16, 10, 10, 10), BorderThickness = new Thickness(1) };
         border.SetResourceReference(Border.BackgroundProperty, "UsageBackground");
         border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");

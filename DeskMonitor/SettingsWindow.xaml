@@ -53,6 +53,11 @@
     <TextBlock Text="卡片样式" FontWeight="SemiBold" Margin="0,0,0,9"/>
     <StackPanel Orientation="Horizontal" Margin="0,0,0,7"><RadioButton x:Name="SmallOption" Content="小 · 币种与价格" GroupName="Style" Margin="0,0,20,0"/><RadioButton x:Name="MediumOption" Content="中 · 行情与趋势" GroupName="Style" Margin="0,0,20,0"/><RadioButton x:Name="LargeOption" Content="大 · 完整行情" GroupName="Style"/></StackPanel>
     <TextBlock Text="小号隐藏顶栏，右键卡片或通过托盘可再次进入设置。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,14"/>
+    <CheckBox x:Name="CompactMarketsOption" Content="紧凑模式 · 行情单行列表" Margin="0,0,0,7"/>
+    <TextBlock Text="行情保留标的、价格和可选的涨跌幅，不显示成交量、趋势图或资金费率；悬停查看详情。行高随字号调整，用量和消息卡片保留原样。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+    <TextBlock Text="紧凑行情涨跌幅"/>
+    <ComboBox x:Name="CompactChangeChoice" Height="30" Margin="0,4,0,7" DisplayMemberPath="Label" SelectedValuePath="Minutes" IsEnabled="{Binding IsChecked, ElementName=CompactMarketsOption}" AutomationProperties.Name="紧凑行情涨跌幅时间区间"/>
+    <TextBlock Text="价格颜色跟随最近一次显示价格：涨绿、跌红、持平中性；涨跌幅颜色按所选区间判断。短周期支持币安现货和永续，按分钟历史价格近似计算（≈）；美股仅支持日涨跌。" Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,14"/>
     <WrapPanel><CheckBox x:Name="PinnedOption" Content="始终置顶" Margin="0,0,24,10"/><CheckBox x:Name="SnapOption" Content="自动吸附屏幕边缘" Margin="0,0,24,10"/><CheckBox x:Name="ResizeOption" Content="允许手动调整大小" Margin="0,0,0,10" Checked="ResizeOptionChanged" Unchecked="ResizeOptionChanged"/></WrapPanel>
     <CheckBox x:Name="LockSizeOption" Content="锁定面板大小" Margin="0,0,0,10" Checked="LockSizeOptionChanged"/>
     <CheckBox x:Name="StartupOption" Content="登录 Windows 时自动启动" Margin="0,0,0,5"/>
@@ -136,6 +141,8 @@
      <TextBlock Text="订阅额度与 API 费用" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,12"/>
      <TextBlock Text="分别开启、独立排序。API 费用每 5 分钟更新；订阅快照每分钟检查。凭据从指定环境变量读取，不写入设置文件。" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,0,0,16"/>
      <StackPanel x:Name="ProviderUsageEditors"/>
+     <TextBlock Margin="0,0,0,8"><Hyperlink NavigateUri="https://platform.openai.com/settings/organization/billing/overview" RequestNavigate="OpenAboutLink" Foreground="{DynamicResource Accent}">OpenAI · 查看余额与账单 ↗</Hyperlink></TextBlock>
+     <TextBlock Text="此入口在浏览器中打开，登录后选择对应组织即可查看余额，无需开启费用卡片或配置密钥。" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,0,0,12"/>
     </StackPanel></ScrollViewer>
    </TabItem>
    <TabItem Header="关于">

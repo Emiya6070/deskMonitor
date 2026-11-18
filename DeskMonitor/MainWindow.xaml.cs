@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private DockedCorners _dockedCorners;
     private bool _updatingCorners;
     private readonly Action<Preferences> _savePreferences;
+    private NotesController? _notes;
 
     public MainWindow() : this(preferences => preferences.Save()) { }
     internal MainWindow(Action<Preferences> savePreferences)
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
         var trayMenu = new Forms.ContextMenuStrip();
         trayMenu.Items.Add("显示挂件", null, (_, _) => Dispatcher.Invoke(ShowWidget));
         trayMenu.Items.Add("设置与币种管理", null, (_, _) => Dispatcher.Invoke(ShowSettings));
+        trayMenu.Items.Add("桌面便签", null, (_, _) => Dispatcher.Invoke(ShowNotes));
         trayMenu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(Close));
         _tray = new Forms.NotifyIcon { Icon = _trayIcon, Text = "DeskMonitor · 右键管理币种和样式", Visible = true, ContextMenuStrip = trayMenu };
         _tray.DoubleClick += (_, _) => Dispatcher.Invoke(ShowWidget);
@@ -88,6 +90,7 @@ public partial class MainWindow : Window
         pinItem.Click += TogglePin;
         menu.Items.Add(pinItem);
         AddMenu(menu, "设置与币种管理", ShowSettings);
+        AddMenu(menu, "桌面便签", ShowNotes);
         AddMenu(menu, "刷新 Codex 用量", () => StartUsageRefresh(true));
         AddMenu(menu, "收起到托盘", () => HideToTray(this, new RoutedEventArgs()));
         AddMenu(menu, "退出", Close);
@@ -99,6 +102,11 @@ public partial class MainWindow : Window
         var item = new MenuItem { Header = title };
         item.Click += (_, _) => action();
         menu.Items.Add(item);
+    }
+    private void ShowNotes()
+    {
+        if (_notes is null) { MessageBox.Show(this, "便签未能加载，请检查启动时的错误信息。", "桌面便签"); return; }
+        _notes.ShowManager();
     }
     private async void WindowLoaded(object sender, RoutedEventArgs e)
     {
@@ -115,6 +123,9 @@ public partial class MainWindow : Window
         ApplyLayout(false);
         BuildCards();
         _ready = true;
+        try { _notes = new NotesController(); _notes.Start(); }
+        catch (Exception ex) when (NotesController.IsExpectedError(ex))
+        { MessageBox.Show(this, "便签未能加载，原文件已保留：" + ex.Message, "桌面便签"); }
         _timer.Start();
         await RestartStreamsAsync();
     }
@@ -155,7 +166,7 @@ public partial class MainWindow : Window
                 continue;
             }
             var market = _preferences.Markets!.Single(m => m.Key == key);
-            var card = new MarketCard(market, _preferences.Style, _preferences.TrendMinutes.GetValueOrDefault(market.Key, 2), _preferences.TextScale, _preferences.NumberScale, _preferences.MonospaceNumbers, _preferences.ShowTrends, _preferences.SmallCornerRadius, _preferences.MarketHeightAdjustment);
+            var card = new MarketCard(market, _preferences.Style, _preferences.TrendMinutes.GetValueOrDefault(market.Key, 2), _preferences.TextScale, _preferences.NumberScale, _preferences.MonospaceNumbers, _preferences.ShowTrends, _preferences.SmallCornerRadius, _preferences.MarketHeightAdjustment, _preferences.CompactMarkets, _preferences.CompactChangeMinutes);
             card.TrendSpanChanged += (_, _) =>
             {
                 var spans = new Dictionary<string, int>(_preferences.TrendMinutes) { [market.Key] = card.TrendMinutes };
@@ -200,6 +211,7 @@ public partial class MainWindow : Window
         (DateProgressHost.Content as DateProgressColumn)?.Refresh();
         StartUsageRefresh(false);
         RefreshProviderUsage();
+        RefreshMarketChanges();
         StartHttpRefreshes();
         _usageCard?.Update(_usage, _usageError, !_usageTask.IsCompleted);
         foreach (var card in CardsPanel.Children.OfType<HttpMessageCard>())
@@ -223,7 +235,8 @@ public partial class MainWindow : Window
             if (!_history.TryGetValue(card.Market.Key, out var history)) _history[card.Market.Key] = history = new();
             var now = DateTimeOffset.UtcNow;
             if (ticker is not null) history.Add(ticker, now);
-            card.Update(ticker, status, card.NeedsTrendRefresh ? history.Window(now, card.TrendMinutes) : null, funding);
+            var change = _marketChanges.GetValueOrDefault(card.Market.Key);
+            card.Update(ticker, status, card.NeedsTrendRefresh ? history.Window(now, card.TrendMinutes) : null, funding, change.Reference, change.Error);
         }
     }
     private void StartHttpRefreshes()
@@ -304,13 +317,17 @@ public partial class MainWindow : Window
         ResizeMode = _preferences.AllowResize ? ResizeMode.CanResize : ResizeMode.NoResize;
         WindowChrome.GetWindowChrome(this).ResizeBorderThickness = new Thickness(_preferences.AllowResize ? 6 : 0);
         var cardCount = _preferences.Markets!.Length + _preferences.HttpSources.Length + _preferences.ProviderUsages.Count(x => x.Enabled);
-        var preset = WidgetLayout.Preset(_preferences.Style, cardCount, _preferences.ShowCodexUsage, _preferences.TextScale, _preferences.NumberScale, _preferences.HideHeader, _preferences.Markets.Count(m => m.IsPerpetual), _preferences.MarketHeightAdjustment, _preferences.Markets.Length);
+        var preset = WidgetLayout.Preset(_preferences.Style, cardCount, _preferences.ShowCodexUsage, _preferences.TextScale, _preferences.NumberScale, _preferences.HideHeader, _preferences.Markets.Count(m => m.IsPerpetual), _preferences.MarketHeightAdjustment, _preferences.Markets.Length, _preferences.CompactMarkets);
         var work = WindowPlacement.WorkSize(this);
         MinWidth = (small ? 220 : _preferences.Style == CardStyle.Medium ? 300 : 340) * _preferences.TextScale;
         var dateWidth = _preferences.DateProgress.Enabled && !dateBelow ? 116 * _preferences.TextScale : 0;
-        MinWidth = MinWidth * CardsPanel.Columns + dateWidth;
-        var presetWidth = preset.Width * CardsPanel.Columns + dateWidth;
+        var changeWidth = _preferences.CompactMarkets && _preferences.CompactChangeMinutes > 0 && _preferences.Markets.Length > 0
+            ? (92 * _preferences.NumberScale + 10) * _preferences.TextScale : 0;
+        MinWidth = (MinWidth + changeWidth) * CardsPanel.Columns + dateWidth;
+        var presetWidth = (preset.Width + changeWidth) * CardsPanel.Columns + dateWidth;
         MinHeight = (_preferences.Markets.Length == 0 ? (small ? 50 : _preferences.HideHeader ? 70 : 114) : small ? 66 : _preferences.HideHeader ? 120 : 180) * _preferences.TextScale;
+        if (_preferences.CompactMarkets && _preferences.Markets.Length > 0)
+            MinHeight = (WidgetLayout.MarketHeight(_preferences.Style, _preferences.NumberScale, compact: true) + (small ? 12 : _preferences.HideHeader ? 22 : 66)) * _preferences.TextScale;
         if (_preferences.DateProgress.Enabled && !dateBelow)
         {
             var date = _preferences.DateProgress;
@@ -411,6 +428,8 @@ public partial class MainWindow : Window
         var layoutChanged = candidate.HideHeader != _preferences.HideHeader || candidate.Style != _preferences.Style || candidate.Markets!.Length != _preferences.Markets!.Length || candidate.HttpSources.Length != _preferences.HttpSources.Length || candidate.ShowCodexUsage != _preferences.ShowCodexUsage || candidate.TextScale != _preferences.TextScale || candidate.NumberScale != _preferences.NumberScale || candidate.MarketHeightAdjustment != _preferences.MarketHeightAdjustment;
         layoutChanged |= candidate.TwoColumnMode != _preferences.TwoColumnMode || candidate.DateProgress.Enabled != _preferences.DateProgress.Enabled || candidate.ProviderUsages.Count(x => x.Enabled) != _preferences.ProviderUsages.Count(x => x.Enabled);
         layoutChanged |= candidate.DateProgress.Placement != _preferences.DateProgress.Placement;
+        layoutChanged |= candidate.CompactMarkets != _preferences.CompactMarkets;
+        layoutChanged |= (candidate.CompactChangeMinutes > 0) != (_preferences.CompactChangeMinutes > 0);
         var lockingCurrentSize = candidate.LockCustomSize && !_preferences.LockCustomSize;
         // ActualWidth/ActualHeight are the authoritative dimensions after a native edge resize.
         // Capture them before changing ResizeMode, which rebuilds the non-client frame.
@@ -425,6 +444,8 @@ public partial class MainWindow : Window
         try { _savePreferences(candidate); }
         catch { if (startup != oldStartup) StartupRegistration.SetEnabled(oldStartup); throw; }
         await ResetProviderUsageAsync();
+        if (marketsChanged || proxyChanged || candidate.CompactMarkets != _preferences.CompactMarkets || candidate.CompactChangeMinutes != _preferences.CompactChangeMinutes)
+            await ResetMarketChangesAsync();
         if (usageChanged)
         {
             _usageRequest?.Cancel();
@@ -445,6 +466,7 @@ public partial class MainWindow : Window
             _history.Clear();
         }
         _preferences = candidate;
+        _changeChanging = false;
         ApplyLayout(resetSize);
         BuildCards();
         if (resetSize || layoutChanged || candidate.UsageExtraHeight != oldUsageExtraHeight)
@@ -525,7 +547,9 @@ public partial class MainWindow : Window
         if (_closing) return;
         SavePreferences();
         _closing = true;
+        _notes?.Dispose();
         _providerLifetime.Cancel();
+        _changeLifetime.Cancel();
         _settings?.Close();
         _timer.Stop();
         _hideRequest?.Cancel();
@@ -535,6 +559,8 @@ public partial class MainWindow : Window
         _usageRequest?.Cancel();
         await Task.WhenAll(_usageTask, _streamTask, _hideTask);
         await Task.WhenAll(_providerTasks.Values);
+        await Task.WhenAll(_changeTasks.Values);
+        _changeLifetime.Dispose(); _changeSlots.Dispose();
         _providerLifetime.Dispose();
         _usageRequest?.Dispose();
         _usageRequest = null;

@@ -23,6 +23,8 @@ public sealed record Preferences
     public double MarketHeightAdjustment { get; init; }
     public bool MonospaceNumbers { get; init; }
     public bool ShowTrends { get; init; } = true;
+    public bool CompactMarkets { get; init; }
+    public int CompactChangeMinutes { get; init; }
     public bool TwoColumnMode { get; init; }
     public int RefreshSeconds { get; init; } = 1;
     public NetworkProxy Proxy { get; init; } = new();
@@ -64,7 +66,7 @@ public sealed record Preferences
         result.Proxy.Validate();
         if (result.DateProgress is null) throw new InvalidDataException("日期进度设置为空。");
         result.DateProgress.Validate();
-        if (result.ProviderUsages is null || result.ProviderUsages.Any(x => x is null) || result.ProviderUsages.Length > 6
+        if (result.ProviderUsages is null || result.ProviderUsages.Any(x => x is null) || result.ProviderUsages.Length > ProviderUsageSettings.Defaults().Length
             || result.ProviderUsages.Select(x => x.Key).Distinct().Count() != result.ProviderUsages.Length) throw new InvalidDataException("用量卡片配置无效。");
         foreach (var usage in result.ProviderUsages) usage.Validate();
         // Migrate the real v0.1 single-symbol settings without losing the user's choice.
@@ -78,6 +80,7 @@ public sealed record Preferences
             || result.CardOrder is null || result.CardOrder.Any(string.IsNullOrWhiteSpace) || result.CardOrder.Distinct().Count() != result.CardOrder.Length
             || !Enum.IsDefined(result.Skin) || !double.IsFinite(result.TextScale) || result.TextScale is < 0.85 or > 1.3
             || !double.IsFinite(result.NumberScale) || result.NumberScale is < 0.9 or > 1.3
+            || !MarketChangeReference.IsSupportedPeriod(result.CompactChangeMinutes)
             || !double.IsFinite(result.MarketHeightAdjustment) || result.MarketHeightAdjustment is < -12 or > 48
             || !double.IsFinite(result.UsageExtraHeight) || result.UsageExtraHeight is < 0 or > 120
             || !Enum.IsDefined(result.CodexTokenRange)

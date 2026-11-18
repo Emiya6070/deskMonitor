@@ -11,10 +11,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        if (args.Contains("--size-lock")) SizeLockChecks.InitializeApplication();
+        if (args.Contains("--size-lock") || args.Contains("--compact-market") || args.Contains("--notes")) SizeLockChecks.InitializeApplication();
         else { var app = new App(); app.InitializeComponent(); }
         var output = Path.GetFullPath(args[0]); Directory.CreateDirectory(output);
+        if (args.Contains("--notes")) { NoteVisualChecks.Run(output); return; }
         if (args.Contains("--size-lock")) { SizeLockChecks.Run(); return; }
+        if (args.Contains("--compact-market")) { CompactMarketChecks.Run(output); return; }
         if (args.Contains("--groups-skins")) { GroupSkinChecks.Run(output); return; }
         if (args.Contains("--date-layout")) { DateLayoutChecks.Run(output); return; }
         var restored = System.Text.Json.JsonSerializer.Deserialize<Preferences>(

@@ -1,0 +1,236 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DeskMonitor Desktop Notes",
+    "version": "1.0.0",
+    "description": "读取和保存桌面便签。summary 为桌面重点，content 为完整分析；写入需版本检查。"
+  },
+  "servers": [
+    {
+      "url": "https://notes.example.com/deskmonitor-notes"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/notes": {
+      "get": {
+        "operationId": "listNotes",
+        "summary": "列出便签，查找要继续的项目与主题",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Note"
+                  },
+                  "maxItems": 100
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "令牌缺失或无效"
+          }
+        }
+      }
+    },
+    "/notes/{id}": {
+      "get": {
+        "operationId": "getNote",
+        "summary": "读取便签全文和最新版本以继续分析",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+            },
+            "description": "稳定便签 ID，继续同一主题时复用"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "令牌缺失或无效"
+          },
+          "404": {
+            "description": "便签不存在"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveNote",
+        "summary": "创建或更新便签；同一主题复用 ID",
+        "description": "新建 expectedRevision=0；更新必须先读取最新 revision。409 冲突不覆盖。超时先 getNote 核实，不另建 ID。",
+        "x-openai-isConsequential": true,
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+            },
+            "description": "稳定便签 ID，继续同一主题时复用"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "令牌缺失或无效"
+          },
+          "409": {
+            "description": "版本冲突；先读取最新便签，不直接覆盖"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "NoteInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "summary",
+          "content",
+          "sourceUrl",
+          "expectedRevision"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "便签标题"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "独立桌面重点，建议 3–6 行，包含结论、下一步和阻塞。"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000,
+            "description": "完整分析及继续工作所需上下文。"
+          },
+          "sourceUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048,
+            "description": "实际获得的 HTTP/HTTPS 原文或 ChatGPT 对话链接；未知时为 null，禁止编造。"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "新建为 0，更新为刚读到的 revision"
+          }
+        }
+      },
+      "Note": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "content",
+          "sourceUrl",
+          "revision",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "便签标题"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "独立桌面重点，建议 3–6 行，包含结论、下一步和阻塞。"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000,
+            "description": "完整分析及继续工作所需上下文。"
+          },
+          "sourceUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048,
+            "description": "实际获得的 HTTP/HTTPS 原文或 ChatGPT 对话链接；未知时为 null，禁止编造。"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

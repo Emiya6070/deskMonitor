@@ -26,9 +26,15 @@ public sealed class ProviderUsageEditor : StackPanel
         _path = Input("订阅额度快照 JSON 的绝对路径", snapshotPath, settings.Kind == UsageAccountKind.Subscription);
         var help = settings.Kind == UsageAccountKind.Subscription
             ? settings.Provider == UsageProvider.Claude ? "使用 scripts/export-claude-usage.ps1 接收 Claude Code statusLine 额度；需支持 rate_limits 的版本。" : "暂不支持直接读取个人订阅；可由本地工具写入标准快照。未提供快照时显示未配置。"
-            : settings.Provider switch { UsageProvider.Cursor => "需要团队 Admin Key；汇总团队当前账期支出，含套餐用量价值，不代表个人 API 剩余额度。", UsageProvider.Claude => "需要组织 Admin Key；显示本月 API 费用，不包含 Pro/Max 订阅或 Priority Tier。", _ => "需要 Management Key 和 Team ID；显示本月 API 费用，不包含 SuperGrok 订阅。" };
+            : settings.Provider switch { UsageProvider.Cursor => "需要团队 Admin Key；汇总团队当前账期支出，含套餐用量价值，不代表个人 API 剩余额度。", UsageProvider.Claude => "需要组织 Admin Key；显示本月 API 费用，不包含 Pro/Max 订阅或 Priority Tier。", UsageProvider.OpenAI => "需要组织 Admin API Key，普通模型调用 Key 不适用；显示本月费用（UTC），不是剩余余额。余额请打开下方官方账单页查看，无需向挂件提供密钥。", _ => "需要 Management Key 和 Team ID；显示本月 API 费用，不包含 SuperGrok 订阅。" };
         var text = new TextBlock { Text = help, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
         text.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Children.Add(text);
+        if (settings.Provider == UsageProvider.OpenAI)
+        {
+            var setup = new TextBlock { Text = "密钥配置位置：Windows 搜索“编辑账户的环境变量”→ 新建用户变量；变量名填写上方名称，变量值粘贴密钥。保存后彻底退出并重启挂件。费用接口暂无明细时显示“暂无费用记录”，不代表实际没有使用。",
+                FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+            setup.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Children.Add(setup);
+        }
     }
     private TextBox Input(string label, string value, bool visible)
     {

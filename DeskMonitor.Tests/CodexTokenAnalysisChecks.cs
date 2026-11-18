@@ -113,6 +113,33 @@ internal static class CodexTokenAnalysisChecks
             check(excludedSol61.Tokens == sol61Pricing.Tokens && excludedSol61.EstimatedCostUsd == .00269m
                 && excludedSol61.Models.Single(x => x.Model == "gpt-6.1-sol").ExcludedFromCost,
                 "GPT-6.1 Sol cost exclusion preserves tokens and excludes its entire estimate");
+
+            var latestPricingDirectory = Directory.CreateDirectory(Path.Combine(directory, "latest-pricing")).FullName;
+            foreach (var (model, expectedCost) in new[]
+            {
+                ("gpt-6.2-astra", 6.308016m),
+                ("gpt-6.2-sol", 1.577004m),
+                ("gpt-6.1-terra", .788502m)
+            })
+            {
+                File.WriteAllLines(Path.Combine(latestPricingDirectory, "usage.jsonl"),
+                [
+                    Context(model),
+                    Usage("2026-09-20T01:00:00Z", atThreshold, atThreshold),
+                    Context(model.ToUpperInvariant()),
+                    Usage("2026-09-20T02:00:00Z", aboveThreshold, aboveThreshold),
+                    Context(model + "-preview"),
+                    Usage("2026-09-20T03:00:00Z", unknown, unknown)
+                ]);
+                var latest = await CodexTokenAnalyzer.ReadAsync(CodexTokenRangeKind.Today, null, null,
+                    CancellationToken.None, latestPricingDirectory, now);
+                check(latest.Models.Single(x => x.Model == model).EstimatedCostUsd == expectedCost
+                    && latest.EstimatedCostUsd == expectedCost,
+                    $"{model} uses Standard input, cache read/write and output prices at 272K and 272K+1");
+                check(latest.UnpricedTokens == 13 && latest.Models.Single(x => x.Model == model + "-preview").EstimatedCostUsd is null,
+                    $"{model} does not price undocumented variants");
+            }
+
             var quota = new QuotaWindow(25, 300, now.AddHours(2));
             var bounds = CodexTokenAnalyzer.ResolveRange(CodexTokenRangeKind.ShortReset, quota, null, now);
             check(bounds.From == now.AddHours(-3) && bounds.Label.Contains("短周期"), "reset range starts at reset timestamp minus window duration");

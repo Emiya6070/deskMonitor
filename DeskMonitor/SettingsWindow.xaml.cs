@@ -142,6 +142,14 @@ public partial class SettingsWindow : Window
         MarketHeightSlider.Value = preferences.MarketHeightAdjustment;
         MonospaceOption.IsChecked = preferences.MonospaceNumbers;
         TrendsOption.IsChecked = preferences.ShowTrends;
+        CompactMarketsOption.IsChecked = preferences.CompactMarkets;
+        CompactChangeChoice.ItemsSource = new[]
+        {
+            new { Minutes = 0, Label = "不显示" }, new { Minutes = 5, Label = "过去 5 分钟" },
+            new { Minutes = 15, Label = "过去 15 分钟" }, new { Minutes = 60, Label = "过去 1 小时" },
+            new { Minutes = 240, Label = "过去 4 小时" }, new { Minutes = 1440, Label = "过去 24 小时（美股为日涨跌）" }
+        };
+        CompactChangeChoice.SelectedValue = preferences.CompactChangeMinutes;
         TwoColumnOption.IsChecked = preferences.TwoColumnMode;
         DateProgressOption.IsChecked = preferences.DateProgress.Enabled;
         DatePlacementChoice.ItemsSource = new[] { "左侧 · 竖排", "卡片下方 · 横排" };
@@ -464,6 +472,8 @@ public partial class SettingsWindow : Window
                 Skin = ((SkinOption)SkinChoice.SelectedItem).Id, TextScale = TextScaleSlider.Value, NumberScale = NumberScaleSlider.Value,
                 MarketHeightAdjustment = MarketHeightSlider.Value,
                 MonospaceNumbers = MonospaceOption.IsChecked == true, ShowTrends = TrendsOption.IsChecked == true,
+                CompactMarkets = CompactMarketsOption.IsChecked == true,
+                CompactChangeMinutes = (int)CompactChangeChoice.SelectedValue,
                 TwoColumnMode = TwoColumnOption.IsChecked == true,
                 RefreshSeconds = new[] { 1, 2, 5 }[RefreshChoice.SelectedIndex],
                 AllowResize = ResizeOption.IsChecked == true, SnapToEdges = SnapOption.IsChecked == true,

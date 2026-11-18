@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace DeskMonitor.Core;
 
-public enum UsageProvider { Cursor, Claude, Grok }
+public enum UsageProvider { Cursor, Claude, Grok, OpenAI }
 public enum UsageAccountKind { Subscription, Api }
 public sealed record ProviderUsageSettings
 {
@@ -21,16 +21,18 @@ public sealed record ProviderUsageSettings
     public void Validate()
     {
         if (!Enum.IsDefined(Provider) || !Enum.IsDefined(Kind) || CredentialEnvironment is null || TeamId is null || SnapshotPath is null
+            || (Provider == UsageProvider.OpenAI && Kind != UsageAccountKind.Api)
             || CredentialEnvironment.Length > 128 || CredentialEnvironment.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')
             || TeamId.Length > 128 || TeamId.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-')
             || SnapshotPath.Length > 1024 || SnapshotPath.Any(char.IsControl)
             || (SnapshotPath.Length > 0 && !Path.IsPathFullyQualified(SnapshotPath)))
             throw new InvalidDataException("用量配置无效：请使用环境变量名及快照文件绝对路径。");
     }
-    public static ProviderUsageSettings[] Defaults() => Enum.GetValues<UsageProvider>().SelectMany(provider => Enum.GetValues<UsageAccountKind>().Select(kind => new ProviderUsageSettings
+    public static ProviderUsageSettings[] Defaults() => Enum.GetValues<UsageProvider>().SelectMany(provider => Enum.GetValues<UsageAccountKind>()
+        .Where(kind => provider != UsageProvider.OpenAI || kind == UsageAccountKind.Api).Select(kind => new ProviderUsageSettings
     {
         Provider = provider, Kind = kind, CredentialEnvironment = provider switch
-        { UsageProvider.Cursor => "CURSOR_ADMIN_API_KEY", UsageProvider.Claude => "ANTHROPIC_ADMIN_KEY", _ => "XAI_MANAGEMENT_KEY" }
+        { UsageProvider.Cursor => "CURSOR_ADMIN_API_KEY", UsageProvider.Claude => "ANTHROPIC_ADMIN_KEY", UsageProvider.OpenAI => "OPENAI_ADMIN_KEY", _ => "XAI_MANAGEMENT_KEY" }
     })).ToArray();
 }
 public sealed record UsageMetric(string Label, string Value, double? RemainingPercent = null, DateTimeOffset? ResetsAt = null);
@@ -117,6 +119,25 @@ public static class ProviderUsageParser
             }
         return total;
     }
+    public static (decimal Total, string? Next, int Records) OpenAiCostsPage(JsonElement root)
+    {
+        // Costs API amount.value is already in USD; it is spending, not a credit balance.
+        decimal total = 0; var records = 0;
+        foreach (var bucket in Field(root, "data", JsonValueKind.Array).EnumerateArray())
+            foreach (var row in Field(bucket, "results", JsonValueKind.Array).EnumerateArray())
+            {
+                var amount = Field(row, "amount", JsonValueKind.Object);
+                if (Field(amount, "currency", JsonValueKind.String).GetString() != "usd")
+                    throw new InvalidDataException("OpenAI 费用币种不是 USD。");
+                total += Number(Field(amount, "value", JsonValueKind.Number));
+                records++;
+            }
+        if (!root.TryGetProperty("has_more", out var more) || more.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            throw new InvalidDataException("OpenAI 费用分页标记缺失。");
+        var next = more.GetBoolean() ? Field(root, "next_page", JsonValueKind.String).GetString() : null;
+        if (more.GetBoolean() && string.IsNullOrWhiteSpace(next)) throw new InvalidDataException("OpenAI 费用分页游标缺失。");
+        return (total, next, records);
+    }
 }
 
 public sealed class ProviderUsageClient : IDisposable
@@ -137,7 +158,9 @@ public sealed class ProviderUsageClient : IDisposable
             return ProviderUsageParser.Subscription(json, settings.Provider, now);
         }
         var key = Environment.GetEnvironmentVariable(settings.CredentialEnvironment);
-        if (string.IsNullOrWhiteSpace(key)) throw new InvalidDataException("未配置环境变量：" + settings.CredentialEnvironment);
+        if (string.IsNullOrWhiteSpace(key)) throw new InvalidDataException(settings.Provider == UsageProvider.OpenAI
+            ? $"请在环境变量 {settings.CredentialEnvironment} 配置 OpenAI Admin API Key；余额可直接在账单页查看。"
+            : "未配置环境变量：" + settings.CredentialEnvironment);
         if (key.Any(char.IsControl)) throw new InvalidDataException("凭据格式无效。");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
@@ -171,6 +194,25 @@ public sealed class ProviderUsageClient : IDisposable
                 total += result.Total; cursor = result.Next;
                 if (cursor is null) return new([new("本月累计费用", ProviderUsageParser.Usd(total))], now, $"组织 API · {start:yyyy-MM-dd} 至今（UTC）· 不含 Priority Tier");
                 if (!seen.Add(cursor)) throw new InvalidDataException("费用分页游标重复。");
+            }
+        }
+        else if (settings.Provider == UsageProvider.OpenAI)
+        {
+            decimal total = 0; string? cursor = null; var records = 0;
+            var seen = new HashSet<string>();
+            for (var page = 0; page < 100; page++)
+            {
+                var url = $"https://api.openai.com/v1/organization/costs?start_time={start.ToUnixTimeSeconds()}&end_time={now.ToUnixTimeSeconds()}&bucket_width=1d&limit=31";
+                if (cursor is not null) url += "&page=" + Uri.EscapeDataString(cursor);
+                using var request = Request(url);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+                using var doc = await SendAsync(request, token);
+                var result = ProviderUsageParser.OpenAiCostsPage(doc.RootElement);
+                total += result.Total; cursor = result.Next; records += result.Records;
+                if (cursor is null) return new([new("本月累计费用", records == 0 ? "暂无费用记录" : ProviderUsageParser.Usd(total))], now,
+                    $"OpenAI 组织 API · {start:yyyy-MM-dd} 至今（UTC）· 非剩余余额"
+                    + (records == 0 ? " · 费用接口尚无明细，不代表没有使用；请核对官网账单" : " · 费用明细可能滞后"));
+                if (!seen.Add(cursor)) throw new InvalidDataException("OpenAI 费用分页游标重复。");
             }
         }
         else

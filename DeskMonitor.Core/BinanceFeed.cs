@@ -35,6 +35,15 @@ public sealed class BinanceFeed : IDisposable
         var json = await _http.GetStringAsync($"{endpoint}?symbol={Uri.EscapeDataString(symbol)}", token).ConfigureAwait(false);
         return MarketParser.ParseTicker(json, symbol, false, DateTimeOffset.UtcNow, kind);
     }
+    public async Task<MarketChangeReference> GetChangeReferenceAsync(MarketSymbol market, int minutes, DateTimeOffset asOf, CancellationToken token)
+    {
+        if (market.Kind is not (MarketKind.Spot or MarketKind.UsdtPerpetual or MarketKind.UsdcPerpetual))
+            throw new ArgumentException("短周期历史价格仅支持币安行情。", nameof(market));
+        var end = MarketChangeReference.ReferenceTime(asOf, minutes).ToUnixTimeMilliseconds();
+        var endpoint = market.Kind == MarketKind.Spot ? "https://data-api.binance.vision/api/v3/klines" : "https://fapi.binance.com/fapi/v1/klines";
+        var json = await _http.GetStringAsync($"{endpoint}?symbol={Uri.EscapeDataString(market.Symbol)}&interval=1m&startTime={end - 59999}&endTime={end}&limit=1", token).ConfigureAwait(false);
+        return MarketChangeReference.Parse(json, market, minutes, asOf, DateTimeOffset.UtcNow);
+    }
     // One combined stream per venue. A futures outage does not stop spot prices.
     public Task RunAsync(IReadOnlyList<MarketSymbol> markets, Action<Ticker> onTicker,
         Action<MarketKind, FeedStatus> onStatus, CancellationToken token, Action<FundingQuote>? onFunding = null) =>

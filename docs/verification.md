@@ -1,3 +1,35 @@
+# v0.3.15 验证记录
+
+## 2026-11-18 Windows 公开版
+
+- 新增 GPT-6.2 Astra、GPT-6.2 Sol、GPT-6.1 Terra 的 Standard API 估算。测试分别核对每款模型在单次总输入为 272,000 和 272,001 Token 时的合计金额，覆盖缓存读取、30 分钟缓存写入和输出。未公布的模型后缀计入「未计价」。费率来源见 [OpenAI 官方价格表](https://developers.openai.com/api/docs/pricing)。
+- Windows 包同时纳入紧凑行情、分区间涨跌幅、OpenAI 本月组织费用和桌面便签。本地便签可离线使用，跨端同步和 ChatGPT MCP 连接使用自建的可选服务。公开文档与 Actions 模板采用示例域名。
+- 使用 .NET SDK 8.0.302 运行项目打包脚本，298 项确定性检查通过。便签服务 Release 构建为 0 警告、0 错误，另有 36 项使用临时便签库的本地服务集成检查通过，涵盖鉴权、OAuth、MCP 读写、版本冲突与重启持久化。
+- Windows x64 ZIP 的 6 个文件均与发布输出或源码 README 的哈希一致。主程序集版本为 0.3.15.0，发布日期为 2026-11-18。发布附件提供 ZIP 和对应的 SHA256SUMS.txt。
+
+# v0.3.14 验证记录
+
+## 2026-11-11 紧凑涨跌幅、价格变色与空费用记录
+
+- 紧凑行情增加不显示、5 分钟、15 分钟、1 小时、4 小时、24 小时选项；旧配置默认不显示。价格相对最近一次显示值涨绿跌红，首次或持平中性，涨跌幅按所选区间独立着色。窄窗口按比例分配三列，自动尺寸增加列宽，锁定尺寸保持不变。
+- 24H 沿用 ticker 的滚动涨跌幅。短周期从同一 Binance 现货或 USDⓈ 永续市场读取完整 1 分钟 K 线收盘价，保留交易对和计价币身份；起点最多早约 60 秒，界面标记 `≈`。每标的每分钟最多读取一次，最多同时 4 个请求；切换区间/市场/代理或退出时取消旧请求。无对应数据、分钟已切换或行情已过期时不计算当前涨跌幅。美股短周期显示未支持。
+- 使用官方 [Spot Klines](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/market) 和 [USDⓈ Futures Klines](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data)，校验 12 字段数组、毫秒分钟边界、正数价格和高低范围，不用本地启动以来的样本冒充历史区间。
+- `dotnet run --project DeskMonitor.Tests -c Release` 共 **280 项确定性检查通过**；覆盖区间计算、时间边界、历史数据缺失/格式错误/跨市场身份、旧基准失效、设置保存及空费用记录。`--live-change` 单独验证现货 BTCUSDT、USDT 永续 BTCUSDT、USDC 永续 BTCUSDC，**3 项真实接口检查通过**；未重复运行已通过的确定性检查。
+- `dotnet run --project scripts/VisualChecks -c Release -- artifacts/qa/compact-change --compact-market` 共 **111 项检查通过**。覆盖三档样式、价格与区间涨跌方向相反、首次/持平颜色、历史记录不足、区间切换与保存、自动宽度和锁定尺寸、最大字号窄窗口。已查看石墨/纸白列表、窄窗口及两处设置页的 WPF 渲染图；预览明确使用示例数据，不写入个人设置或查询账号。
+- OpenAI 所有费用分页无明细时显示“暂无费用记录”，有明确零金额记录才显示 `0.00 USD`；设置页补充 Windows 用户环境变量的具体配置位置。只读账户诊断中，同一 Admin Key 的 Costs 和模型 Usage 查询均成功，Costs 无明细而 Usage 有记录；没有权限拒绝或格式化丢失小金额的证据。尚不能确定缺少费用明细的具体原因，也没有验证平台账单延迟时长；产品仍只轮询费用接口。
+- `scripts/package.ps1 -SkipTests` 发布编译通过，复用已通过的检查。已生成 `artifacts/releases/DeskMonitor-v0.3.14-win-x64.zip`，包内仅 6 个规定文件，程序集版本为 0.3.14.0；未提交或发布至 GitHub。SHA256：`209a1535de9ae70ac97b6ecf2042454d79657763b656826a38104814a21aaded`。
+
+# v0.3.13 验证记录
+
+## 2026-11-11 紧凑行情与 OpenAI API 费用
+
+- 新增独立的行情紧凑模式：标的和价格单行显示，默认行高 36 DIP，隐藏趋势、涨跌幅、费率及详情，不显示成交量。沿用真实行情的过期淡化和悬停信息；不改变用量和消息卡片。
+- OpenAI 接入官方 `/v1/organization/costs`，使用 `OPENAI_ADMIN_KEY` 对应的组织 Admin API Key，按 UTC 自本月起汇总各页的 USD 金额。明确区分费用和余额，在设置页及卡片提供官方账单页入口；该入口无需密钥。
+- 本机 .NET 8 SDK 8.0.302 / Windows Desktop Runtime 8.0.6：`dotnet build DeskMonitor/DeskMonitor.csproj -c Release` 通过，0 警告、0 错误；`dotnet run --project DeskMonitor.Tests -c Release` 共 234 项检查通过。
+- 新增费用检查覆盖官方 GET 地址、Bearer 认证、UTC 月边界、秒级时间、完整分页、游标编码及循环拒绝、USD 精度与调整项、有效空结果、字段缺失、错误币种、缺少凭据、权限错误脱敏和取消；没有使用真实 Admin Key 联调。
+- `dotnet run --project scripts/VisualChecks -c Release -- artifacts/qa/compact-openai --compact-market` 的 39 项检查通过：三档样式的实际设置保存/恢复、自动窗口收紧、尺寸锁定保持；石墨/纸白渲染、最大字号与窄窗口价格边界、过期行情、OpenAI 旧值保留和账单按钮。截图使用明确标注的示例数据，已查看列表和设置页画面；不写入个人设置、不启动账户查询，未进行人工鼠标点击或真实浏览器登录验收。
+- 已通过 `scripts/package.ps1 -SkipTests` 生成 `artifacts/releases/DeskMonitor-v0.3.13-win-x64.zip`，复用上述已通过的测试。核对包内仅有 6 个规定文件、程序集版本为 0.3.13，依赖 .NET 8 Desktop Runtime；未发布到 GitHub。SHA256：`17ba530bf0382c3051fe6cb9fe0ab62a851f5bb3f55feac4beb88fcdfe320294`。
+
 # v0.3.12 验证记录
 
 ## 2026-10-10 Codex 桌面版程序自动发现修复

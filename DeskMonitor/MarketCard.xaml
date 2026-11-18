@@ -2,10 +2,11 @@
  <Border x:Name="CardRoot" Background="{DynamicResource CardBackground}" CornerRadius="{DynamicResource CardRadius}" Padding="16,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
   <Grid>
    <Grid x:Name="CompactPanel" Visibility="Collapsed" SizeChanged="CompactSizeChanged">
-    <Grid.ColumnDefinitions><ColumnDefinition x:Name="CompactSymbolColumn" Width="1.05*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition x:Name="CompactSymbolColumn" Width="1.05*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition x:Name="CompactChangeColumn" Width="Auto"/></Grid.ColumnDefinitions>
     <StackPanel VerticalAlignment="Center" Margin="0,0,8,0"><TextBlock x:Name="CompactSymbol" FontSize="11" TextWrapping="Wrap"/><TextBlock x:Name="CompactFunding" FontSize="9" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/></StackPanel>
     <Grid x:Name="SmallChart" Grid.Column="1" Width="52" Height="22" Margin="8,0" Visibility="Collapsed" VerticalAlignment="Center"><Canvas x:Name="SmallChartCanvas" ClipToBounds="True" SizeChanged="ChartSizeChanged"><Path x:Name="SmallChartLine" Stroke="{DynamicResource Accent}" StrokeThickness="1.3" StrokeLineJoin="Round"/></Canvas></Grid>
-    <Viewbox Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right"><TextBlock x:Name="CompactPrice" Text="—" FontSize="23" FontWeight="SemiBold" FontFamily="Segoe UI"/></Viewbox>
+    <Viewbox Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right"><TextBlock x:Name="CompactPrice" Text="—" FontSize="23" FontWeight="SemiBold" FontFamily="Segoe UI" Typography.NumeralAlignment="Tabular"/></Viewbox>
+    <Viewbox x:Name="CompactChangeBox" Grid.Column="3" MaxWidth="92" Margin="10,0,0,0" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right" Visibility="Collapsed"><TextBlock x:Name="CompactChange" Text="—" FontSize="12" FontFamily="Segoe UI" Typography.NumeralAlignment="Tabular"/></Viewbox>
    </Grid>
    <Grid x:Name="FullPanel">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

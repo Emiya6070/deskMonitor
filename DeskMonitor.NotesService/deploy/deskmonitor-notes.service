@@ -1,0 +1,25 @@
+[Unit]
+Description=DeskMonitor private desktop notes
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=deskmonitor-notes
+StateDirectoryMode=0700
+WorkingDirectory=/opt/deskmonitor-notes/current
+ExecStart=/opt/deskmonitor-notes/current/DeskMonitor.NotesService --urls http://127.0.0.1:5088
+EnvironmentFile=/etc/deskmonitor-notes.env
+Environment=NOTES_DATA_FILE=/var/lib/deskmonitor-notes/notes.json
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+MemoryMax=256M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

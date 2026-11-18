@@ -9,6 +9,18 @@ var now = DateTimeOffset.UtcNow;
 var payload = JsonSerializer.Serialize(new { e = "24hrTicker", E = now.ToUnixTimeMilliseconds(), s = "BTCUSDT", c = "110", o = "100", h = "120", l = "90" });
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception($"FAIL: {name}"); Console.WriteLine($"PASS: {name}"); Interlocked.Increment(ref passed); }
+if (args.Contains("--notes-service")) { await NoteServiceChecks.RunAsync(args[Array.IndexOf(args, "--notes-service") + 1], Check); return; }
+if (args.Contains("--notes-mcp-live"))
+{
+    var endpoint = Environment.GetEnvironmentVariable("NOTES_PUBLIC_URL") ?? throw new InvalidOperationException("NOTES_PUBLIC_URL missing");
+    var owner = Environment.GetEnvironmentVariable("NOTES_API_TOKEN") ?? throw new InvalidOperationException("NOTES_API_TOKEN missing");
+    var secret = Environment.GetEnvironmentVariable("NOTES_OAUTH_CLIENT_SECRET") ?? throw new InvalidOperationException("NOTES_OAUTH_CLIENT_SECRET missing");
+    var tokens = await NotesMcpChecks.RunAsync(endpoint, owner, secret, Check);
+    await NotesMcpChecks.VerifyRefreshAsync(endpoint, secret, tokens, Check);
+    return;
+}
+DesktopNoteChecks.Run(Check);
+if (args.Contains("--live-change")) { await MarketChangeChecks.RunLiveAsync(Check); return; }
 void Reject(string json, string name)
 {
     try { MarketParser.ParseTicker(json, "BTCUSDT", true, now); }
@@ -275,6 +287,13 @@ var tradFiPreferences = Preferences.Normalize(settings with { Markets = [tradFiM
 Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(tradFiPreferences))!).Markets!.Single().TradFi, "TradFi identity persists through settings");
 Check(WidgetLayout.Preset(CardStyle.Medium, 2, contractCount: 1).Height - WidgetLayout.Preset(CardStyle.Medium, 2).Height == 24 && WidgetLayout.Preset(CardStyle.Small, 2, contractCount: 2).Height == WidgetLayout.Preset(CardStyle.Small, 2).Height, "funding reserves full-card space while compact height stays unchanged");
 await ProviderUsageChecks.RunAsync(Check);
+await OpenAiUsageChecks.RunAsync(Check);
+MarketChangeChecks.Run(Check);
+var compactSettings = Preferences.Normalize(settings with { CompactMarkets = true });
+Check(Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(compactSettings))!).CompactMarkets && !migrated.CompactMarkets,
+    "compact markets persist and existing settings retain their layout");
+Check(WidgetLayout.Preset(CardStyle.Medium, 3, marketCount: 2, contractCount: 1, compactMarkets: true).Height == 66 + 2 * 36 + 150,
+    "compact markets shrink only market rows and reclaim funding space");
 var onlyProvider = Preferences.Normalize(new Preferences { Markets = [], ProviderUsages = [new() { Provider = UsageProvider.Claude, Kind = UsageAccountKind.Subscription, Enabled = true }], DateProgress = new() { Enabled = true, Period = DateProgressPeriod.Month } });
 var roundTripProvider = Preferences.Normalize(JsonSerializer.Deserialize<Preferences>(JsonSerializer.Serialize(onlyProvider))!);
 Check(roundTripProvider.ProviderUsages.Single().Enabled && roundTripProvider.DateProgress.Period == DateProgressPeriod.Month && roundTripProvider.CardOrder.Contains("usage:Claude:Subscription"), "provider-only settings and date progress persist and join card ordering");
